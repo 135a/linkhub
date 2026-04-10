@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="CompilerConfiguration">
+    <annotationProcessing>
+      <profile default="true" name="Default" enabled="true" />
+      <profile name="Maven default annotation processors profile" enabled="true">
+        <sourceOutputDir name="target/generated-sources/annotations" />
+        <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
+        <outputRelativeToContentRoot value="true" />
+        <module name="shortlink-admin" />
+        <module name="shortlink-gateway" />
+        <module name="shortlink-project" />
+      </profile>
+    </annotationProcessing>
+    <bytecodeTargetLevel>
+      <module name="nacos-demo" target="1.8" />
+      <module name="shortlink-aggregation" target="17" />
+      <module name="shortlink-register" target="17" />
+    </bytecodeTargetLevel>
+  </component>
+</project>

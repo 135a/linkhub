@@ -1,0 +1,185 @@
+services:
+  mysql:
+    build:
+      context: .
+      dockerfile: mysql/Dockerfile
+    container_name: shortlink-mysql
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: link
+    volumes:
+      - mysql-data:/var/lib/mysql
+    networks:
+      - shortlink-network
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  redis:
+    image: redis:latest
+    container_name: shortlink-redis
+    ports:
+      - "6379:6379"
+    networks:
+      - shortlink-network
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+  nacos:
+    image: nacos/nacos-server:v2.2.3
+    container_name: shortlink-nacos
+    ports:
+      - "8848:8848"
+      - "9848:9848"
+      - "9849:9849"
+    environment:
+      - MODE=standalone
+      - NACOS_AUTH_ENABLE=false
+      - JVM_XMS=768m
+      - JVM_XMX=768m
+      - JVM_XMN=512m
+    networks:
+      - shortlink-network
+    deploy:
+      resources:
+        limits:
+          memory: 1024m
+    restart: always
+
+  rocketmq-namesrv:
+    image: apache/rocketmq:4.9.4
+    container_name: rmqnamesrv
+    ports:
+      - "9876:9876"
+    environment:
+      # 通过 JAVA_OPT 环境变量传递 JVM 内存参数
+      - JAVA_OPT=-Xms32m -Xmx64m -Xmn32m
+    command: sh mqnamesrv
+    networks:
+      - shortlink-network
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+
+  rocketmq-broker:
+    image: apache/rocketmq:4.9.4
+    container_name: rmqbroker
+    ports:
+      - "10909:10909"
+      - "10911:10911"
+    environment:
+      - NAMESRV_ADDR=rocketmq-namesrv:9876
+      # 充裕的 Broker 内存：堆最大 512m，确保高吞吐和稳定性
+      - JAVA_OPT=-Duser.home=/opt -Xms256m -Xmx512m -Xmn256m -XX:MetaspaceSize=64m -XX:MaxMetaspaceSize=128m
+    command: sh mqbroker -c /home/rocketmq/rocketmq-4.9.4/conf/broker.conf
+    depends_on:
+      - rocketmq-namesrv
+    networks:
+      - shortlink-network
+    deploy:
+      resources:
+        limits:
+          # 容器限制提升至 1G，为 Broker 提供充足的非堆内存空间
+          memory: 1024m
+
+  admin:
+    build:
+      context: .
+      dockerfile: admin/Dockerfile
+    container_name: shortlink-admin
+    ports:
+      - "8002:8002"
+    environment:
+      - SPRING_PROFILES_ACTIVE=dev
+      - SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR=nacos:8848
+      - SPRING_DATA_REDIS_HOST=redis
+      # Note: ShardingSphere config might need adjustment if it points to 127.0.0.1
+    depends_on:
+      - mysql
+      - redis
+      - nacos
+    networks:
+      - shortlink-network
+    deploy:
+      resources:
+        limits:
+          memory: 768m
+
+  gateway:
+    build:
+      context: .
+      dockerfile: gateway/Dockerfile
+    container_name: shortlink-gateway
+    ports:
+      - "8000:8000"
+    environment:
+      - SPRING_PROFILES_ACTIVE=dev
+      - SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR=nacos:8848
+      - SPRING_DATA_REDIS_HOST=redis
+    depends_on:
+      - redis
+      - nacos
+    networks:
+      - shortlink-network
+    deploy:
+      resources:
+          limits:
+            memory: 512m
+
+  project:
+    build:
+      context: .
+      dockerfile: project/Dockerfile
+    container_name: shortlink-project
+    ports:
+      - "8001:8001"
+    environment:
+      - SPRING_PROFILES_ACTIVE=dev
+      - SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR=nacos:8848
+      - SPRING_DATA_REDIS_HOST=redis
+      - ROCKETMQ_NAME_SERVER=rocketmq-namesrv:9876
+    depends_on:
+      - mysql
+      - redis
+      - nacos
+      - rocketmq-namesrv
+      - rocketmq-broker
+    networks:
+      - shortlink-network
+    deploy:
+      resources:
+        limits:
+          memory: 768m
+  frontend:
+    build:
+      context: .
+      dockerfile: console-vue/Dockerfile
+    container_name: shortlink-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - gateway
+    networks:
+      - shortlink-network
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+networks:
+  shortlink-network:
+    driver: bridge
+
+volumes:
+  mysql-data:
