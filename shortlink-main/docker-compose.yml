@@ -16,6 +16,8 @@ services:
     deploy:
       resources:
         limits:
+          memory: 1g
+        reservations:
           memory: 512m
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot"]
@@ -23,6 +25,7 @@ services:
       timeout: 5s
       retries: 10
       start_period: 30s
+    restart: unless-stopped
 
   redis:
     image: redis:latest
@@ -31,11 +34,14 @@ services:
       - "6379:6379"
     networks:
       - shortlink-network
-    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+    command: redis-server --maxmemory 384mb --maxmemory-policy allkeys-lru
     deploy:
       resources:
         limits:
+          memory: 512m
+        reservations:
           memory: 256m
+    restart: unless-stopped
   nacos:
     image: nacos/nacos-server:v2.2.3
     container_name: shortlink-nacos
@@ -54,8 +60,10 @@ services:
     deploy:
       resources:
         limits:
-          memory: 1024m
-    restart: always
+          memory: 1g
+        reservations:
+          memory: 768m
+    restart: unless-stopped
 
   rocketmq-namesrv:
     image: apache/rocketmq:4.9.4
@@ -63,8 +71,7 @@ services:
     ports:
       - "9876:9876"
     environment:
-      # 通过 JAVA_OPT 环境变量传递 JVM 内存参数
-      - JAVA_OPT=-Xms32m -Xmx64m -Xmn32m
+      - JAVA_OPT=-Xms64m -Xmx128m -Xmn64m -XX:MetaspaceSize=32m -XX:MaxMetaspaceSize=64m
     command: sh mqnamesrv
     networks:
       - shortlink-network
@@ -72,6 +79,9 @@ services:
       resources:
         limits:
           memory: 256m
+        reservations:
+          memory: 128m
+    restart: unless-stopped
 
   rocketmq-broker:
     image: apache/rocketmq:4.9.4
@@ -81,8 +91,7 @@ services:
       - "10911:10911"
     environment:
       - NAMESRV_ADDR=rocketmq-namesrv:9876
-      # 充裕的 Broker 内存：堆最大 512m，确保高吞吐和稳定性
-      - JAVA_OPT=-Duser.home=/opt -Xms256m -Xmx512m -Xmn256m -XX:MetaspaceSize=64m -XX:MaxMetaspaceSize=128m
+      - JAVA_OPT=-Duser.home=/opt -Xms512m -Xmx1024m -Xmn512m -XX:MetaspaceSize=128m -XX:MaxMetaspaceSize=256m
     command: sh mqbroker -c /home/rocketmq/rocketmq-4.9.4/conf/broker.conf
     depends_on:
       - rocketmq-namesrv
@@ -91,8 +100,10 @@ services:
     deploy:
       resources:
         limits:
-          # 容器限制提升至 1G，为 Broker 提供充足的非堆内存空间
-          memory: 1024m
+          memory: 1536m
+        reservations:
+          memory: 1g
+    restart: unless-stopped
 
   admin:
     build:
@@ -105,17 +116,22 @@ services:
       - SPRING_PROFILES_ACTIVE=dev
       - SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR=nacos:8848
       - SPRING_DATA_REDIS_HOST=redis
-      # Note: ShardingSphere config might need adjustment if it points to 127.0.0.1
     depends_on:
-      - mysql
-      - redis
-      - nacos
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      nacos:
+        condition: service_started
     networks:
       - shortlink-network
     deploy:
       resources:
         limits:
           memory: 768m
+        reservations:
+          memory: 512m
+    restart: unless-stopped
 
   gateway:
     build:
@@ -129,14 +145,19 @@ services:
       - SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR=nacos:8848
       - SPRING_DATA_REDIS_HOST=redis
     depends_on:
-      - redis
-      - nacos
+      redis:
+        condition: service_started
+      nacos:
+        condition: service_started
     networks:
       - shortlink-network
     deploy:
       resources:
-          limits:
-            memory: 512m
+        limits:
+          memory: 768m
+        reservations:
+          memory: 512m
+    restart: unless-stopped
 
   project:
     build:
@@ -151,17 +172,25 @@ services:
       - SPRING_DATA_REDIS_HOST=redis
       - ROCKETMQ_NAME_SERVER=rocketmq-namesrv:9876
     depends_on:
-      - mysql
-      - redis
-      - nacos
-      - rocketmq-namesrv
-      - rocketmq-broker
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      nacos:
+        condition: service_started
+      rocketmq-namesrv:
+        condition: service_started
+      rocketmq-broker:
+        condition: service_started
     networks:
       - shortlink-network
     deploy:
       resources:
         limits:
+          memory: 1g
+        reservations:
           memory: 768m
+    restart: unless-stopped
   frontend:
     build:
       context: .
@@ -170,13 +199,17 @@ services:
     ports:
       - "80:80"
     depends_on:
-      - gateway
+      gateway:
+        condition: service_started
     networks:
       - shortlink-network
     deploy:
       resources:
         limits:
-          memory: 1g
+          memory: 512m
+        reservations:
+          memory: 256m
+    restart: unless-stopped
 networks:
   shortlink-network:
     driver: bridge

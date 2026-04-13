@@ -16,6 +16,7 @@
 package com.nym.shortlink.project.service.impl;
 
 import cn.hutool.core.bean.BeanUtil;
+import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.lang.UUID;
 import cn.hutool.core.text.StrBuilder;
 import cn.hutool.core.util.ArrayUtil;
@@ -46,6 +47,7 @@ import com.nym.shortlink.project.dto.resp.ShortLinkCreateRespDTO;
 import com.nym.shortlink.project.dto.resp.ShortLinkGroupCountQueryRespDTO;
 import com.nym.shortlink.project.dto.resp.ShortLinkPageRespDTO;
 import com.nym.shortlink.project.mq.producer.ShortLinkStatsSaveProducer;
+import com.nym.shortlink.project.service.CacheMonitoringService;
 import com.nym.shortlink.project.service.ShortLinkService;
 import com.nym.shortlink.project.toolkit.HashUtil;
 import com.nym.shortlink.project.toolkit.LinkUtil;
@@ -106,6 +108,7 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
     private final RedissonClient redissonClient;
     private final ShortLinkStatsSaveProducer shortLinkStatsSaveProducer;
     private final GotoDomainWhiteListConfiguration gotoDomainWhiteListConfiguration;
+    private final CacheMonitoringService cacheMonitoringService;
 
     @Value("${short-link.domain.default}")
     private String createShortLinkDefaultDomain;
@@ -114,7 +117,7 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
     @Override
     public ShortLinkCreateRespDTO createShortLink(ShortLinkCreateReqDTO requestParam) {
         // 短链接接口的并发量有多少？如何测试？详情查看：https://nageoffer.com/shortlink/question
-        verificationWhitelist(requestParam.getOriginUrl());
+        //verificationWhitelist(requestParam.getOriginUrl());
         String shortLinkSuffix = generateSuffix(requestParam);
         String fullShortUrl = StrBuilder.create(createShortLinkDefaultDomain)
                 .append("/")
@@ -170,7 +173,7 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
 
     @Override
     public ShortLinkCreateRespDTO createShortLinkByLock(ShortLinkCreateReqDTO requestParam) {
-        verificationWhitelist(requestParam.getOriginUrl());
+        //verificationWhitelist(requestParam.getOriginUrl());
         String fullShortUrl;
         // 为什么说布隆过滤器性能远胜于分布式锁？详情查看：https://nageoffer.com/shortlink/question
         RLock lock = redissonClient.getLock(SHORT_LINK_CREATE_LOCK_KEY);
@@ -214,7 +217,9 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
                     LinkUtil.getLinkCacheValidTime(requestParam.getValidDate()), TimeUnit.MILLISECONDS
             );
         } finally {
-            lock.unlock();
+            if (lock.isHeldByCurrentThread()) {
+                lock.unlock();
+            }
         }
         return ShortLinkCreateRespDTO.builder()
                 .fullShortUrl("http://" + fullShortUrl)
@@ -253,7 +258,7 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
     @Transactional(rollbackFor = Exception.class)
     @Override
     public void updateShortLink(ShortLinkUpdateReqDTO requestParam) {
-        verificationWhitelist(requestParam.getOriginUrl());
+        //verificationWhitelist(requestParam.getOriginUrl());
         LambdaQueryWrapper<ShortLinkDO> queryWrapper = Wrappers.lambdaQuery(ShortLinkDO.class)
                 .eq(ShortLinkDO::getGid, requestParam.getOriginGid())
                 .eq(ShortLinkDO::getFullShortUrl, requestParam.getFullShortUrl())
@@ -325,7 +330,9 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
                 shortLinkGotoDO.setGid(requestParam.getGid());
                 shortLinkGotoMapper.insert(shortLinkGotoDO);
             } finally {
-                rLock.unlock();
+                if (rLock.isHeldByCurrentThread()) {
+                    rLock.unlock();
+                }
             }
         }
         // 短链接如何保障缓存和数据库一致性？详情查看：https://nageoffer.com/shortlink/question
@@ -344,6 +351,10 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
 
     @Override
     public IPage<ShortLinkPageRespDTO> pageShortLink(ShortLinkPageReqDTO requestParam) {
+        // 防止 gid 为空导致 ShardingSphere 分片键错误
+        if (StrUtil.isBlank(requestParam.getGid())) {
+            throw new ClientException("分组标识不能为空");
+        }
         IPage<ShortLinkDO> resultPage = baseMapper.pageLink(requestParam);
         return resultPage.convert(each -> {
             ShortLinkPageRespDTO result = BeanUtil.toBean(each, ShortLinkPageRespDTO.class);
@@ -354,6 +365,10 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
 
     @Override
     public List<ShortLinkGroupCountQueryRespDTO> listGroupShortLinkCount(List<String> requestParam) {
+        // 防止空集合导致 SQL IN () 语法错误
+        if (CollUtil.isEmpty(requestParam)) {
+            return new ArrayList<>();
+        }
         QueryWrapper<ShortLinkDO> queryWrapper = Wrappers.query(new ShortLinkDO())
                 .select("gid as gid, count(*) as shortLinkCount")
                 .in("gid", requestParam)
@@ -377,17 +392,20 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
         String fullShortUrl = serverName + serverPort + "/" + shortUri;
         String originalLink = stringRedisTemplate.opsForValue().get(String.format(GOTO_SHORT_LINK_KEY, fullShortUrl));
         if (StrUtil.isNotBlank(originalLink)) {
+            cacheMonitoringService.recordHitAsync();
             shortLinkStats(buildLinkStatsRecordAndSetUser(fullShortUrl, request, response));
             ((HttpServletResponse) response).sendRedirect(originalLink);
             return;
         }
         boolean contains = shortUriCreateCachePenetrationBloomFilter.contains(fullShortUrl);
         if (!contains) {
+            cacheMonitoringService.recordMissAsync();
             ((HttpServletResponse) response).sendRedirect("/page/notfound");
             return;
         }
         String gotoIsNullShortLink = stringRedisTemplate.opsForValue().get(String.format(GOTO_IS_NULL_SHORT_LINK_KEY, fullShortUrl));
         if (StrUtil.isNotBlank(gotoIsNullShortLink)) {
+            cacheMonitoringService.recordMissAsync();
             ((HttpServletResponse) response).sendRedirect("/page/notfound");
             return;
         }
@@ -396,12 +414,14 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
         try {
             originalLink = stringRedisTemplate.opsForValue().get(String.format(GOTO_SHORT_LINK_KEY, fullShortUrl));
             if (StrUtil.isNotBlank(originalLink)) {
+                cacheMonitoringService.recordHitAsync();
                 shortLinkStats(buildLinkStatsRecordAndSetUser(fullShortUrl, request, response));
                 ((HttpServletResponse) response).sendRedirect(originalLink);
                 return;
             }
             gotoIsNullShortLink = stringRedisTemplate.opsForValue().get(String.format(GOTO_IS_NULL_SHORT_LINK_KEY, fullShortUrl));
             if (StrUtil.isNotBlank(gotoIsNullShortLink)) {
+                cacheMonitoringService.recordMissAsync();
                 ((HttpServletResponse) response).sendRedirect("/page/notfound");
                 return;
             }
@@ -410,6 +430,7 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
             ShortLinkGotoDO shortLinkGotoDO = shortLinkGotoMapper.selectOne(linkGotoQueryWrapper);
             if (shortLinkGotoDO == null) {
                 stringRedisTemplate.opsForValue().set(String.format(GOTO_IS_NULL_SHORT_LINK_KEY, fullShortUrl), "-", 30, TimeUnit.MINUTES);
+                cacheMonitoringService.recordMissAsync();
                 ((HttpServletResponse) response).sendRedirect("/page/notfound");
                 return;
             }
@@ -421,6 +442,7 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
             ShortLinkDO shortLinkDO = baseMapper.selectOne(queryWrapper);
             if (shortLinkDO == null || (shortLinkDO.getValidDate() != null && shortLinkDO.getValidDate().before(new Date()))) {
                 stringRedisTemplate.opsForValue().set(String.format(GOTO_IS_NULL_SHORT_LINK_KEY, fullShortUrl), "-", 30, TimeUnit.MINUTES);
+                cacheMonitoringService.recordMissAsync();
                 ((HttpServletResponse) response).sendRedirect("/page/notfound");
                 return;
             }
@@ -429,10 +451,13 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
                     shortLinkDO.getOriginUrl(),
                     LinkUtil.getLinkCacheValidTime(shortLinkDO.getValidDate()), TimeUnit.MILLISECONDS
             );
+            cacheMonitoringService.recordMissAsync();
             shortLinkStats(buildLinkStatsRecordAndSetUser(fullShortUrl, request, response));
             ((HttpServletResponse) response).sendRedirect(shortLinkDO.getOriginUrl());
         } finally {
-            lock.unlock();
+            if (lock.isHeldByCurrentThread()) {
+                lock.unlock();
+            }
         }
     }
 

@@ -106,7 +106,9 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, UserDO> implements 
         } catch (DuplicateKeyException ex) {
             throw new ClientException(USER_EXIST);
         } finally {
-            lock.unlock();
+            if (lock.isHeldByCurrentThread()) {
+                lock.unlock();
+            }
         }
     }
 

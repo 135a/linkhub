@@ -107,7 +107,9 @@ public class GroupServiceImpl extends ServiceImpl<GroupMapper, GroupDO> implemen
                 throw new ServiceException("生成分组标识频繁");
             }
         } finally {
-            lock.unlock();
+            if (lock.isHeldByCurrentThread()) {
+                lock.unlock();
+            }
         }
     }
 
