@@ -3,10 +3,7 @@
   <component name="ProjectModuleManager">
     <modules>
       <module fileurl="file://$PROJECT_DIR$/shortlink-main/admin/shortlink-admin.iml" filepath="$PROJECT_DIR$/shortlink-main/admin/shortlink-admin.iml" />
-      <module fileurl="file://$PROJECT_DIR$/shortlink-main/shortlink-all.iml" filepath="$PROJECT_DIR$/shortlink-main/shortlink-all.iml" />
-      <module fileurl="file://$PROJECT_DIR$/shortlink-main/gateway/shortlink-gateway.iml" filepath="$PROJECT_DIR$/shortlink-main/gateway/shortlink-gateway.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/shortlink-main.iml" filepath="$PROJECT_DIR$/.idea/shortlink-main.iml" />
-      <module fileurl="file://$PROJECT_DIR$/shortlink-main/project/shortlink-project.iml" filepath="$PROJECT_DIR$/shortlink-main/project/shortlink-project.iml" />
     </modules>
   </component>
 </project>

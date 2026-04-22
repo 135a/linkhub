@@ -1,0 +1,691 @@
+services:
+  # ==================== MySQL 主从复制 ====================
+  mysql-master:
+    build:
+      context: .
+      dockerfile: mysql/Dockerfile
+    container_name: shortlink-mysql-master
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: link
+    volumes:
+      - mysql-master-data:/var/lib/mysql
+    networks:
+      - shortlink-network
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+        reservations:
+          memory: 512m
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+    command: --server-id=1 --log-bin=mysql-bin --binlog-format=ROW
+
+  mysql-slave:
+    image: mysql:8.0
+    container_name: shortlink-mysql-slave
+    ports:
+      - "3307:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+    volumes:
+      - mysql-slave-data:/var/lib/mysql
+    networks:
+      - shortlink-network
+    depends_on:
+      mysql-master:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+        reservations:
+          memory: 512m
+    restart: unless-stopped
+    command: --server-id=2 --relay-log=mysql-relay-bin --read-only=1
+
+  # ==================== Redis Sentinel 哨兵模式 ====================
+  redis-master:
+    image: redis:latest
+    container_name: shortlink-redis-master
+    ports:
+      - "6379:6379"
+    networks:
+      - shortlink-network
+    command: redis-server --maxmemory 384mb --maxmemory-policy allkeys-lru
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+        reservations:
+          memory: 256m
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  redis-slave-1:
+    image: redis:latest
+    container_name: shortlink-redis-slave-1
+    ports:
+      - "6380:6379"
+    networks:
+      - shortlink-network
+    command: redis-server --slaveof redis-master 6379 --maxmemory 384mb --maxmemory-policy allkeys-lru
+    depends_on:
+      redis-master:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+        reservations:
+          memory: 256m
+    restart: unless-stopped
+
+  redis-slave-2:
+    image: redis:latest
+    container_name: shortlink-redis-slave-2
+    ports:
+      - "6381:6379"
+    networks:
+      - shortlink-network
+    command: redis-server --slaveof redis-master 6379 --maxmemory 384mb --maxmemory-policy allkeys-lru
+    depends_on:
+      redis-master:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+        reservations:
+          memory: 256m
+    restart: unless-stopped
+
+  redis-sentinel-1:
+    image: redis:latest
+    container_name: shortlink-redis-sentinel-1
+    ports:
+      - "26379:26379"
+    networks:
+      - shortlink-network
+    command: redis-sentinel /etc/redis/sentinel.conf
+    volumes:
+      - ./redis/sentinel.conf:/etc/redis/sentinel.conf
+    depends_on:
+      - redis-master
+      - redis-slave-1
+      - redis-slave-2
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+        reservations:
+          memory: 128m
+    restart: unless-stopped
+
+  redis-sentinel-2:
+    image: redis:latest
+    container_name: shortlink-redis-sentinel-2
+    ports:
+      - "26380:26379"
+    networks:
+      - shortlink-network
+    command: redis-sentinel /etc/redis/sentinel.conf
+    volumes:
+      - ./redis/sentinel.conf:/etc/redis/sentinel.conf
+    depends_on:
+      - redis-master
+      - redis-slave-1
+      - redis-slave-2
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+        reservations:
+          memory: 128m
+    restart: unless-stopped
+
+  redis-sentinel-3:
+    image: redis:latest
+    container_name: shortlink-redis-sentinel-3
+    ports:
+      - "26381:26379"
+    networks:
+      - shortlink-network
+    command: redis-sentinel /etc/redis/sentinel.conf
+    volumes:
+      - ./redis/sentinel.conf:/etc/redis/sentinel.conf
+    depends_on:
+      - redis-master
+      - redis-slave-1
+      - redis-slave-2
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+        reservations:
+          memory: 128m
+    restart: unless-stopped
+
+  # ==================== Nacos 集群模式 ====================
+  nacos-1:
+    image: nacos/nacos-server:v2.2.3
+    container_name: shortlink-nacos-1
+    ports:
+      - "8848:8848"
+      - "9848:9848"
+      - "9849:9849"
+    environment:
+      - MODE=cluster
+      - NACOS_SERVERS=nacos-1:8848 nacos-2:8848 nacos-3:8848
+      - NACOS_AUTH_ENABLE=false
+      - JVM_XMS=512m
+      - JVM_XMX=512m
+      - JVM_XMN=256m
+      - SPRING_DATASOURCE_PLATFORM=mysql
+      - MYSQL_SERVICE_HOST=mysql-master
+      - MYSQL_SERVICE_PORT=3306
+      - MYSQL_SERVICE_DB_NAME=nacos_config
+      - MYSQL_SERVICE_USER=root
+      - MYSQL_SERVICE_PASSWORD=root
+    volumes:
+      - nacos-1-data:/home/nacos/data
+    networks:
+      - shortlink-network
+    depends_on:
+      mysql-master:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+        reservations:
+          memory: 768m
+    restart: unless-stopped
+
+  nacos-2:
+    image: nacos/nacos-server:v2.2.3
+    container_name: shortlink-nacos-2
+    ports:
+      - "8849:8848"
+      - "9850:9848"
+      - "9851:9849"
+    environment:
+      - MODE=cluster
+      - NACOS_SERVERS=nacos-1:8848 nacos-2:8848 nacos-3:8848
+      - NACOS_AUTH_ENABLE=false
+      - JVM_XMS=512m
+      - JVM_XMX=512m
+      - JVM_XMN=256m
+      - SPRING_DATASOURCE_PLATFORM=mysql
+      - MYSQL_SERVICE_HOST=mysql-master
+      - MYSQL_SERVICE_PORT=3306
+      - MYSQL_SERVICE_DB_NAME=nacos_config
+      - MYSQL_SERVICE_USER=root
+      - MYSQL_SERVICE_PASSWORD=root
+    volumes:
+      - nacos-2-data:/home/nacos/data
+    networks:
+      - shortlink-network
+    depends_on:
+      mysql-master:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+        reservations:
+          memory: 768m
+    restart: unless-stopped
+
+  nacos-3:
+    image: nacos/nacos-server:v2.2.3
+    container_name: shortlink-nacos-3
+    ports:
+      - "8850:8848"
+      - "9852:9848"
+      - "9853:9849"
+    environment:
+      - MODE=cluster
+      - NACOS_SERVERS=nacos-1:8848 nacos-2:8848 nacos-3:8848
+      - NACOS_AUTH_ENABLE=false
+      - JVM_XMS=512m
+      - JVM_XMX=512m
+      - JVM_XMN=256m
+      - SPRING_DATASOURCE_PLATFORM=mysql
+      - MYSQL_SERVICE_HOST=mysql-master
+      - MYSQL_SERVICE_PORT=3306
+      - MYSQL_SERVICE_DB_NAME=nacos_config
+      - MYSQL_SERVICE_USER=root
+      - MYSQL_SERVICE_PASSWORD=root
+    volumes:
+      - nacos-3-data:/home/nacos/data
+    networks:
+      - shortlink-network
+    depends_on:
+      mysql-master:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+        reservations:
+          memory: 768m
+    restart: unless-stopped
+
+  # ==================== RocketMQ 双主双从 ====================
+  rocketmq-namesrv-1:
+    image: apache/rocketmq:4.9.4
+    container_name: rmqnamesrv-1
+    ports:
+      - "9876:9876"
+    environment:
+      - JAVA_OPT=-Xms64m -Xmx128m -Xmn64m -XX:MetaspaceSize=32m -XX:MaxMetaspaceSize=64m
+    networks:
+      - shortlink-network
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+        reservations:
+          memory: 128m
+    restart: unless-stopped
+    command: sh mqnamesrv
+
+  rocketmq-namesrv-2:
+    image: apache/rocketmq:4.9.4
+    container_name: rmqnamesrv-2
+    ports:
+      - "9877:9876"
+    environment:
+      - JAVA_OPT=-Xms64m -Xmx128m -Xmn64m -XX:MetaspaceSize=32m -XX:MaxMetaspaceSize=64m
+    networks:
+      - shortlink-network
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+        reservations:
+          memory: 128m
+    restart: unless-stopped
+    command: sh mqnamesrv
+
+  rocketmq-broker-master-1:
+    image: apache/rocketmq:4.9.4
+    container_name: rmqbroker-master-1
+    ports:
+      - "10909:10909"
+      - "10911:10911"
+    environment:
+      - NAMESRV_ADDR=rocketmq-namesrv-1:9876;rocketmq-namesrv-2:9876
+      - JAVA_OPT=-Duser.home=/opt -Xms512m -Xmx1024m -Xmn512m -XX:MetaspaceSize=128m -XX:MaxMetaspaceSize=256m
+    volumes:
+      - rocketmq-master-1-data:/home/rocketmq/store
+    networks:
+      - shortlink-network
+    depends_on:
+      - rocketmq-namesrv-1
+      - rocketmq-namesrv-2
+    deploy:
+      resources:
+        limits:
+          memory: 1536m
+        reservations:
+          memory: 1g
+    restart: unless-stopped
+    command: sh mqbroker -c /home/rocketmq/rocketmq-4.9.4/conf/broker.conf
+
+  rocketmq-broker-master-2:
+    image: apache/rocketmq:4.9.4
+    container_name: rmqbroker-master-2
+    ports:
+      - "10912:10909"
+      - "10913:10911"
+    environment:
+      - NAMESRV_ADDR=rocketmq-namesrv-1:9876;rocketmq-namesrv-2:9876
+      - JAVA_OPT=-Duser.home=/opt -Xms512m -Xmx1024m -Xmn512m -XX:MetaspaceSize=128m -XX:MaxMetaspaceSize=256m
+    volumes:
+      - rocketmq-master-2-data:/home/rocketmq/store
+    networks:
+      - shortlink-network
+    depends_on:
+      - rocketmq-namesrv-1
+      - rocketmq-namesrv-2
+    deploy:
+      resources:
+        limits:
+          memory: 1536m
+        reservations:
+          memory: 1g
+    restart: unless-stopped
+    command: sh mqbroker -c /home/rocketmq/rocketmq-4.9.4/conf/broker.conf
+
+  # ==================== Gateway 多实例(负载均衡) ====================
+  gateway-1:
+    build:
+      context: .
+      dockerfile: gateway/Dockerfile
+    container_name: shortlink-gateway-1
+    ports:
+      - "8000:8000"
+    environment:
+      - SPRING_PROFILES_ACTIVE=dev
+      - SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR=nacos-1:8848,nacos-2:8848,nacos-3:8848
+      - SPRING_DATA_REDIS_HOST=redis-master
+    depends_on:
+      redis-master:
+        condition: service_healthy
+      nacos-1:
+        condition: service_started
+    networks:
+      - shortlink-network
+    deploy:
+      resources:
+        limits:
+          memory: 768m
+        reservations:
+          memory: 512m
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  gateway-2:
+    build:
+      context: .
+      dockerfile: gateway/Dockerfile
+    container_name: shortlink-gateway-2
+    ports:
+      - "8010:8000"
+    environment:
+      - SPRING_PROFILES_ACTIVE=dev
+      - SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR=nacos-1:8848,nacos-2:8848,nacos-3:8848
+      - SPRING_DATA_REDIS_HOST=redis-master
+    depends_on:
+      redis-master:
+        condition: service_healthy
+      nacos-1:
+        condition: service_started
+    networks:
+      - shortlink-network
+    deploy:
+      resources:
+        limits:
+          memory: 768m
+        reservations:
+          memory: 512m
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  gateway-3:
+    build:
+      context: .
+      dockerfile: gateway/Dockerfile
+    container_name: shortlink-gateway-3
+    ports:
+      - "8020:8000"
+    environment:
+      - SPRING_PROFILES_ACTIVE=dev
+      - SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR=nacos-1:8848,nacos-2:8848,nacos-3:8848
+      - SPRING_DATA_REDIS_HOST=redis-master
+    depends_on:
+      redis-master:
+        condition: service_healthy
+      nacos-1:
+        condition: service_started
+    networks:
+      - shortlink-network
+    deploy:
+      resources:
+        limits:
+          memory: 768m
+        reservations:
+          memory: 512m
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  # ==================== Admin 多实例 ====================
+  admin-1:
+    build:
+      context: .
+      dockerfile: admin/Dockerfile
+    container_name: shortlink-admin-1
+    ports:
+      - "8002:8002"
+    environment:
+      - SPRING_PROFILES_ACTIVE=dev
+      - SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR=nacos-1:8848,nacos-2:8848,nacos-3:8848
+      - SPRING_DATA_REDIS_HOST=redis-master
+    depends_on:
+      mysql-master:
+        condition: service_healthy
+      redis-master:
+        condition: service_healthy
+      nacos-1:
+        condition: service_started
+    networks:
+      - shortlink-network
+    deploy:
+      resources:
+        limits:
+          memory: 768m
+        reservations:
+          memory: 512m
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  admin-2:
+    build:
+      context: .
+      dockerfile: admin/Dockerfile
+    container_name: shortlink-admin-2
+    ports:
+      - "8012:8002"
+    environment:
+      - SPRING_PROFILES_ACTIVE=dev
+      - SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR=nacos-1:8848,nacos-2:8848,nacos-3:8848
+      - SPRING_DATA_REDIS_HOST=redis-master
+    depends_on:
+      mysql-master:
+        condition: service_healthy
+      redis-master:
+        condition: service_healthy
+      nacos-1:
+        condition: service_started
+    networks:
+      - shortlink-network
+    deploy:
+      resources:
+        limits:
+          memory: 768m
+        reservations:
+          memory: 512m
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  # ==================== Project 多实例 ====================
+  project-1:
+    build:
+      context: .
+      dockerfile: project/Dockerfile
+    container_name: shortlink-project-1
+    ports:
+      - "8001:8001"
+    environment:
+      - SPRING_PROFILES_ACTIVE=dev
+      - SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR=nacos-1:8848,nacos-2:8848,nacos-3:8848
+      - SPRING_DATA_REDIS_HOST=redis-master
+      - ROCKETMQ_NAME_SERVER=rocketmq-namesrv-1:9876;rocketmq-namesrv-2:9876
+    depends_on:
+      mysql-master:
+        condition: service_healthy
+      redis-master:
+        condition: service_healthy
+      nacos-1:
+        condition: service_started
+      rocketmq-namesrv-1:
+        condition: service_started
+      rocketmq-broker-master-1:
+        condition: service_started
+    networks:
+      - shortlink-network
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+        reservations:
+          memory: 768m
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  project-2:
+    build:
+      context: .
+      dockerfile: project/Dockerfile
+    container_name: shortlink-project-2
+    ports:
+      - "8011:8001"
+    environment:
+      - SPRING_PROFILES_ACTIVE=dev
+      - SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR=nacos-1:8848,nacos-2:8848,nacos-3:8848
+      - SPRING_DATA_REDIS_HOST=redis-master
+      - ROCKETMQ_NAME_SERVER=rocketmq-namesrv-1:9876;rocketmq-namesrv-2:9876
+    depends_on:
+      mysql-master:
+        condition: service_healthy
+      redis-master:
+        condition: service_healthy
+      nacos-1:
+        condition: service_started
+      rocketmq-namesrv-1:
+        condition: service_started
+      rocketmq-broker-master-1:
+        condition: service_started
+    networks:
+      - shortlink-network
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+        reservations:
+          memory: 768m
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  project-3:
+    build:
+      context: .
+      dockerfile: project/Dockerfile
+    container_name: shortlink-project-3
+    ports:
+      - "8021:8001"
+    environment:
+      - SPRING_PROFILES_ACTIVE=dev
+      - SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR=nacos-1:8848,nacos-2:8848,nacos-3:8848
+      - SPRING_DATA_REDIS_HOST=redis-master
+      - ROCKETMQ_NAME_SERVER=rocketmq-namesrv-1:9876;rocketmq-namesrv-2:9876
+    depends_on:
+      mysql-master:
+        condition: service_healthy
+      redis-master:
+        condition: service_healthy
+      nacos-1:
+        condition: service_started
+      rocketmq-namesrv-1:
+        condition: service_started
+      rocketmq-broker-master-1:
+        condition: service_started
+    networks:
+      - shortlink-network
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+        reservations:
+          memory: 768m
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  # ==================== Frontend (通过Nginx负载均衡Gateway) ====================
+  frontend:
+    build:
+      context: .
+      dockerfile: console-vue/Dockerfile
+    container_name: shortlink-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - gateway-1
+      - gateway-2
+      - gateway-3
+    networks:
+      - shortlink-network
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+        reservations:
+          memory: 256m
+    restart: unless-stopped
+
+networks:
+  shortlink-network:
+    driver: bridge
+
+volumes:
+  mysql-master-data:
+  mysql-slave-data:
+  nacos-1-data:
+  nacos-2-data:
+  nacos-3-data:
+  rocketmq-master-1-data:
+  rocketmq-master-2-data:
