@@ -1,0 +1,18 @@
+spring:
+  application:
+    name: ${SPRING_APPLICATION_NAME:shortlink}
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.security.saml2.Saml2RelyingPartyAutoConfiguration
+
+logging:
+  config: classpath:logback-spring.xml
+  level:
+    root: INFO
+    com.nym.shortlink: DEBUG
+
+trace:
+  logstash:
+    host: ${LOGSTASH_HOST:shortlink-log-go}
+    port: ${LOGSTASH_PORT:8081}
+    enabled: ${LOGSTASH_ENABLED:true}

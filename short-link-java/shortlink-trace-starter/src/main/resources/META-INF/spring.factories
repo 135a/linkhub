@@ -1,0 +1,3 @@
+org.springframework.boot.autoconfigure.EnableAutoConfiguration=\
+com.nym.shortlink.trace.TraceAutoConfig,\
+com.nym.shortlink.trace.config.TraceWebMvcConfig

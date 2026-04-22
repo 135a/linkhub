@@ -1,0 +1,45 @@
+server:
+  port: 8080
+
+routes:
+  - path_prefix: "/api/v1/shortlink"
+    target: "http://project:8001"
+    rate_limit:
+      enabled: true
+      qps: 1000
+  - path_prefix: "/api/v1/user"
+    target: "http://admin:8002"
+    rate_limit:
+      enabled: true
+      qps: 500
+
+redis:
+  host: "redis"
+  port: 6379
+  password: ""
+  db: 0
+
+cors:
+  allowed_origins:
+    - "http://localhost:3000"
+    - "http://localhost:8080"
+  allowed_methods:
+    - "GET"
+    - "POST"
+    - "PUT"
+    - "DELETE"
+    - "OPTIONS"
+  allowed_headers:
+    - "Origin"
+    - "Content-Type"
+    - "Authorization"
+    - "X-Trace-ID"
+  expose_headers:
+    - "X-Trace-ID"
+  allow_credentials: true
+  max_age: 86400
+
+log:
+  logstash_host: "log-collector"
+  logstash_port: 8081
+  level: "info"

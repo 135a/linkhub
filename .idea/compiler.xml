@@ -10,6 +10,7 @@
         <module name="shortlink-admin" />
         <module name="shortlink-gateway" />
         <module name="shortlink-project" />
+        <module name="shortlink-trace-starter" />
       </profile>
     </annotationProcessing>
     <bytecodeTargetLevel>

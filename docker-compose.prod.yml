@@ -1,0 +1,308 @@
+# =============================================
+# LinkHub - Docker Compose Prod 模式配置
+#
+# 特性：
+# - 针对 4GB 服务器精心优化
+# - 最小化内存占用，确保稳定运行
+# - 开启资源限制
+# =============================================
+
+services:
+  mysql:
+    build:
+      context: ./short-link-java
+      dockerfile: mysql/Dockerfile
+    container_name: linkhub-mysql
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: link
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./short-link-log-go/init-mysql:/docker-entrypoint-initdb.d
+    networks:
+      - linkhub-network
+    deploy:
+      resources:
+        limits:
+          memory: 800m
+        reservations:
+          memory: 512m
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
+  redis:
+    image: redis:latest
+    container_name: linkhub-redis
+    ports:
+      - "6379:6379"
+    networks:
+      - linkhub-network
+    command: redis-server --maxmemory 384m --maxmemory-policy allkeys-lru
+    deploy:
+      resources:
+        limits:
+          memory: 400m
+        reservations:
+          memory: 256m
+    restart: unless-stopped
+
+  nacos:
+    image: nacos/nacos-server:v2.2.3
+    container_name: linkhub-nacos
+    ports:
+      - "8848:8848"
+      - "9848:9848"
+      - "9849:9849"
+    environment:
+      - MODE=standalone
+      - NACOS_AUTH_ENABLE=false
+      - JVM_XMS=384m
+      - JVM_XMX=384m
+      - JVM_XMN=256m
+    networks:
+      - linkhub-network
+    deploy:
+      resources:
+        limits:
+          memory: 600m
+        reservations:
+          memory: 400m
+    restart: unless-stopped
+
+  rocketmq-namesrv:
+    image: apache/rocketmq:4.9.4
+    container_name: linkhub-rmqnamesrv
+    ports:
+      - "9876:9876"
+    environment:
+      - JAVA_OPT=-Xms64m -Xmx128m -Xmn64m -XX:MetaspaceSize=32m -XX:MaxMetaspaceSize=64m
+    command: sh mqnamesrv
+    networks:
+      - linkhub-network
+    deploy:
+      resources:
+        limits:
+          memory: 180m
+        reservations:
+          memory: 100m
+    restart: unless-stopped
+
+  rocketmq-broker:
+    image: apache/rocketmq:4.9.4
+    container_name: linkhub-rmqbroker
+    ports:
+      - "10909:10909"
+      - "10911:10911"
+    environment:
+      - NAMESRV_ADDR=rocketmq-namesrv:9876
+      - JAVA_OPT=-Duser.home=/opt -Xms256m -Xmx512m -Xmn256m -XX:MetaspaceSize=64m -XX:MaxMetaspaceSize=128m
+    command: sh mqbroker -c /home/rocketmq/rocketmq-4.9.4/conf/broker.conf
+    depends_on:
+      rocketmq-namesrv:
+        condition: service_started
+    networks:
+      - linkhub-network
+    deploy:
+      resources:
+        limits:
+          memory: 650m
+        reservations:
+          memory: 400m
+    restart: unless-stopped
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:latest
+    container_name: linkhub-clickhouse
+    ports:
+      - "8123:8123"
+      - "9000:9000"
+    volumes:
+      - clickhouse-data:/var/lib/clickhouse
+      - ./short-link-log-go/init-clickhouse:/docker-entrypoint-initdb.d
+    networks:
+      - linkhub-network
+    deploy:
+      resources:
+        limits:
+          memory: 600m
+        reservations:
+          memory: 400m
+    restart: unless-stopped
+
+  admin:
+    build:
+      context: ./short-link-java
+      dockerfile: admin/Dockerfile
+    container_name: linkhub-admin
+    ports:
+      - "8002:8002"
+    environment:
+      - SPRING_PROFILES_ACTIVE=dev
+      - SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR=nacos:8848
+      - SPRING_DATA_REDIS_HOST=redis
+      - JAVA_OPTS=-Xms256m -Xmx384m
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      nacos:
+        condition: service_started
+    networks:
+      - linkhub-network
+    deploy:
+      resources:
+        limits:
+          memory: 500m
+        reservations:
+          memory: 300m
+    restart: unless-stopped
+
+  gateway:
+    build:
+      context: ./short-link-gateway-go
+      dockerfile: Dockerfile
+    container_name: linkhub-gateway-go
+    ports:
+      - "8000:8080"
+    environment:
+      - CONFIG_PATH=/app/config.yaml
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - LOGSTASH_HOST=log-collector
+      - LOGSTASH_PORT=8081
+    volumes:
+      - ./short-link-gateway-go/config.yaml:/app/config.yaml
+    depends_on:
+      redis:
+        condition: service_started
+      log-collector:
+        condition: service_started
+    networks:
+      - linkhub-network
+    deploy:
+      resources:
+        limits:
+          memory: 250m
+        reservations:
+          memory: 128m
+    restart: unless-stopped
+
+  project:
+    build:
+      context: ./short-link-java
+      dockerfile: project/Dockerfile
+    container_name: linkhub-project
+    ports:
+      - "8001:8001"
+    environment:
+      - SPRING_PROFILES_ACTIVE=dev
+      - SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR=nacos:8848
+      - SPRING_DATA_REDIS_HOST=redis
+      - ROCKETMQ_NAME_SERVER=rocketmq-namesrv:9876
+      - TRACE_LOGSTASH_HOST=log-collector
+      - TRACE_LOGSTASH_PORT=8081
+      - JAVA_OPTS=-Xms384m -Xmx512m
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      nacos:
+        condition: service_started
+      rocketmq-namesrv:
+        condition: service_started
+      rocketmq-broker:
+        condition: service_started
+    networks:
+      - linkhub-network
+    deploy:
+      resources:
+        limits:
+          memory: 600m
+        reservations:
+          memory: 450m
+    restart: unless-stopped
+
+  log-collector:
+    build:
+      context: ./short-link-log-go
+      dockerfile: Dockerfile
+    container_name: linkhub-log-collector
+    ports:
+      - "8081:8081"
+    environment:
+      - CLICKHOUSE_HOST=clickhouse
+      - CLICKHOUSE_PORT=8123
+      - MYSQL_HOST=mysql
+      - MYSQL_PORT=3306
+      - MYSQL_USER=root
+      - MYSQL_PASSWORD=root
+    depends_on:
+      clickhouse:
+        condition: service_started
+      mysql:
+        condition: service_healthy
+    networks:
+      - linkhub-network
+    deploy:
+      resources:
+        limits:
+          memory: 250m
+        reservations:
+          memory: 128m
+    restart: unless-stopped
+
+  log-frontend:
+    build:
+      context: ./short-link-log-go
+      dockerfile: frontend/Dockerfile
+    container_name: linkhub-log-frontend
+    ports:
+      - "3001:80"
+    depends_on:
+      - log-collector
+    networks:
+      - linkhub-network
+    deploy:
+      resources:
+        limits:
+          memory: 128m
+        reservations:
+          memory: 64m
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./short-link-java
+      dockerfile: console-vue/Dockerfile
+    container_name: linkhub-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      gateway:
+        condition: service_started
+    networks:
+      - linkhub-network
+    deploy:
+      resources:
+        limits:
+          memory: 128m
+        reservations:
+          memory: 64m
+    restart: unless-stopped
+
+networks:
+  linkhub-network:
+    driver: bridge
+
+volumes:
+  mysql-data:
+  clickhouse-data:
