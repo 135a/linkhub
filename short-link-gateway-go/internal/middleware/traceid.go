@@ -1,61 +1,60 @@
 package middleware
 
 import (
-	"shortlink-gateway-go/internal/config"
-	"shortlink-gateway-go/internal/metrics"
+	"encoding/binary"
+	"encoding/hex"
+	"math/rand"
+	"sync"
+	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 )
 
-const (
-	TraceIDHeader = "X-Trace-ID"
-	TraceIDKey    = "trace_id"
-)
+// fastUUID generates a UUID-like string using timestamp + random bytes.
+// Much faster than crypto/rand-based uuid.NewV4().
+func fastUUID() string {
+	b := make([]byte, 16)
+	now := time.Now().UnixNano()
+	binary.LittleEndian.PutUint64(b[:8], uint64(now))
+	// fill remaining 8 bytes with random
+	for i := 8; i < 16; i += 4 {
+		v := rand.Int31()
+		b[i] = byte(v)
+		b[i+1] = byte(v >> 8)
+		b[i+2] = byte(v >> 16)
+		b[i+3] = byte(v >> 24)
+	}
+	// format as hex string
+	return hex.EncodeToString(b)
+}
 
 func TraceIDInjector() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		traceID := c.GetHeader(TraceIDHeader)
+		traceID := c.GetHeader("X-Trace-ID")
 		if traceID == "" {
-			traceID = uuid.NewV4().String()
+			traceID = fastUUID()
 		}
-		c.Set(TraceIDKey, traceID)
-		c.Header(TraceIDHeader, traceID)
+		c.Set("trace_id", traceID)
+		c.Header("X-Trace-ID", traceID)
 		c.Next()
 	}
 }
 
-func AccessLogger(mc *metrics.MetricsCollector) gin.HandlerFunc {
+func AccessLogger(mc interface{}) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		traceID, _ := c.Get(TraceIDKey)
-		tid, ok := traceID.(string)
-		if !ok {
-			tid = ""
-		}
+		traceID, _ := c.Get("trace_id")
+		tid, _ := traceID.(string)
 
 		c.Next()
 
-		latency := float64(c.Writer.ElapsedMs())
-		statusCode := c.Writer.Status()
-		method := c.Request.Method
-		path := c.Request.URL.Path
-
-		mc.RecordRequest(method, path, statusCode, latency)
-
-		accessLog := map[string]interface{}{
-			"method":      method,
-			"path":        path,
-			"status_code": statusCode,
-			"latency_ms":  latency,
-			"trace_id":    tid,
-		}
-
-		cfg := config.Get()
-		if cfg != nil {
-			go sendAccessLog(accessLog)
+		// record metrics
+		if mc != nil {
+			if collector, ok := mc.(interface {
+				RecordRequest(string, string, int, float64)
+			}); ok {
+				latency := float64(c.Writer.ElapsedMs())
+				collector.RecordRequest(c.Request.Method, c.Request.URL.Path, c.Writer.Status(), latency)
+			}
 		}
 	}
-}
-
-func sendAccessLog(log map[string]interface{}) {
 }

@@ -9,21 +9,33 @@ import (
 )
 
 type Config struct {
-	Server   ServerConfig   `yaml:"server"`
-	Routes   []RouteConfig  `yaml:"routes"`
-	Redis    RedisConfig    `yaml:"redis"`
-	CORS     CORSConfig     `yaml:"cors"`
-	Log      LogConfig      `yaml:"log"`
+	Server   ServerConfig    `yaml:"server"`
+	Nacos    NacosConfig     `yaml:"nacos"`
+	Routes   []RouteConfig   `yaml:"routes"`
+	Redis    RedisConfig     `yaml:"redis"`
+	CORS     CORSConfig      `yaml:"cors"`
+	Log      LogConfig       `yaml:"log"`
 }
 
 type ServerConfig struct {
 	Port string `yaml:"port"`
 }
 
+type NacosConfig struct {
+	Enabled         bool   `yaml:"enabled"`
+	Host            string `yaml:"host"`
+	Port            uint64 `yaml:"port"`
+	Namespace       string `yaml:"namespace"`
+	TimeoutMs       uint64 `yaml:"timeout_ms"`
+	RefreshInterval int    `yaml:"refresh_interval"`
+}
+
 type RouteConfig struct {
-	PathPrefix string         `yaml:"path_prefix"`
-	Target     string         `yaml:"target"`
-	RateLimit  RateLimitConfig `yaml:"rate_limit"`
+	PathPrefix    string          `yaml:"path_prefix"`
+	ServiceName   string          `yaml:"service_name"`
+	Target        string          `yaml:"target"`
+	DefaultTarget string          `yaml:"default_target"`
+	RateLimit     RateLimitConfig `yaml:"rate_limit"`
 }
 
 type RateLimitConfig struct {
@@ -73,6 +85,15 @@ func Load(path string) (*Config, error) {
 		}
 		if cfg.Server.Port == "" {
 			cfg.Server.Port = "8080"
+		}
+		if cfg.Nacos.Port == 0 {
+			cfg.Nacos.Port = 8848
+		}
+		if cfg.Nacos.TimeoutMs == 0 {
+			cfg.Nacos.TimeoutMs = 5000
+		}
+		if cfg.Nacos.RefreshInterval == 0 {
+			cfg.Nacos.RefreshInterval = 30
 		}
 	})
 	return cfg, loadErr

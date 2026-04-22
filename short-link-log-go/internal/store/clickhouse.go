@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"shortlink-log-go/internal/model"
 	"strings"
-	"sync"
 	"time"
 
 	clickhouse "github.com/ClickHouse/clickhouse-go/v2"
@@ -13,11 +12,8 @@ import (
 )
 
 type ClickHouseStore struct {
-	conn  driver.Conn
-	mu    sync.Mutex
-	buf   []model.LogEntry
-	ch    chan struct{}
-	maxBuf int
+	conn driver.Conn
+	ch   chan model.LogEntry
 }
 
 func NewClickHouseStore(host, port string) (*ClickHouseStore, error) {
@@ -28,18 +24,20 @@ func NewClickHouseStore(host, port string) (*ClickHouseStore, error) {
 			Username: "default",
 			Password: "",
 		},
+		Settings: map[string]interface{}{
+			"async_insert":          1,
+			"wait_for_async_insert": 0,
+		},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("clickhouse connect: %w", err)
 	}
 
 	s := &ClickHouseStore{
-		conn:   conn,
-		buf:    make([]model.LogEntry, 0, 1000),
-		ch:     make(chan struct{}, 1),
-		maxBuf: 1000,
+		conn: conn,
+		ch:   make(chan model.LogEntry, 10000),
 	}
-	go s.flushLoop()
+	go s.batchLoop()
 	return s, nil
 }
 
@@ -48,43 +46,44 @@ func (s *ClickHouseStore) Ping() error {
 }
 
 func (s *ClickHouseStore) Buffer(entry model.LogEntry) {
-	s.mu.Lock()
-	s.buf = append(s.buf, entry)
-	s.mu.Unlock()
-
-	if len(s.buf) >= s.maxBuf {
-		s.Flush()
+	select {
+	case s.ch <- entry:
+	default:
+		// buffer full, drop silently to avoid blocking hot path
 	}
 }
 
-func (s *ClickHouseStore) Flush() {
-	s.mu.Lock()
-	if len(s.buf) == 0 {
-		s.mu.Unlock()
-		return
-	}
-	batch := s.buf
-	s.buf = make([]model.LogEntry, 0, s.maxBuf)
-	s.mu.Unlock()
-
-	go func() {
-		batch, err := s.conn.PrepareBatch(context.Background(), "INSERT INTO logs (timestamp, level, service, trace_id, thread, message, fields)")
-		if err != nil {
-			return
-		}
-		for _, e := range batch {
-			batch.Append(e.Timestamp, e.Level, e.Service, e.TraceID, e.Thread, e.Message, e.Fields)
-		}
-		batch.Send()
-	}()
-}
-
-func (s *ClickHouseStore) flushLoop() {
+func (s *ClickHouseStore) batchLoop() {
 	ticker := time.NewTicker(2 * time.Second)
 	defer ticker.Stop()
-	for range ticker.C {
-		s.Flush()
+
+	buf := make([]model.LogEntry, 0, 1000)
+	for {
+		select {
+		case entry := <-s.ch:
+			buf = append(buf, entry)
+			if len(buf) >= 1000 {
+				s.flush(buf)
+				buf = make([]model.LogEntry, 0, 1000)
+			}
+		case <-ticker.C:
+			if len(buf) > 0 {
+				s.flush(buf)
+				buf = make([]model.LogEntry, 0, 1000)
+			}
+		}
 	}
+}
+
+func (s *ClickHouseStore) flush(batch []model.LogEntry) {
+	b, err := s.conn.PrepareBatch(context.Background(), "INSERT INTO logs (timestamp, level, service, trace_id, thread, message, fields)")
+	if err != nil {
+		return
+	}
+	for _, e := range batch {
+		b.Append(e.Timestamp, e.Level, e.Service, e.TraceID, e.Thread, e.Message, e.Fields)
+	}
+	b.Send()
 }
 
 func (s *ClickHouseStore) Query(req model.LogQueryRequest) (*model.LogQueryResponse, error) {
@@ -121,12 +120,10 @@ func (s *ClickHouseStore) Query(req model.LogQueryRequest) (*model.LogQueryRespo
 		whereClause = " WHERE " + strings.Join(where, " AND ")
 	}
 
-	// Count
 	var total int64
 	countSQL := "SELECT count() FROM logs" + whereClause
 	s.conn.QueryRow(context.Background(), countSQL, args...).Scan(&total)
 
-	// Pagination
 	page := req.Page
 	if page < 1 {
 		page = 1

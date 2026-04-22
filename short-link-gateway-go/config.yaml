@@ -1,14 +1,24 @@
 server:
   port: 8080
 
+nacos:
+  enabled: true
+  host: "nacos"
+  port: 8848
+  namespace: ""
+  timeout_ms: 5000
+  refresh_interval: 30
+
 routes:
   - path_prefix: "/api/v1/shortlink"
-    target: "http://project:8001"
+    service_name: "shortlink-project"
+    default_target: "http://project:8001"
     rate_limit:
       enabled: true
       qps: 1000
   - path_prefix: "/api/v1/user"
-    target: "http://admin:8002"
+    service_name: "shortlink-admin"
+    default_target: "http://admin:8002"
     rate_limit:
       enabled: true
       qps: 500

@@ -10,6 +10,7 @@ import (
 	"shortlink-gateway-go/internal/handler"
 	"shortlink-gateway-go/internal/metrics"
 	"shortlink-gateway-go/internal/middleware"
+	"shortlink-gateway-go/internal/nacos"
 	"shortlink-gateway-go/internal/proxy"
 	"shortlink-gateway-go/internal/ratelimit"
 	"syscall"
@@ -28,6 +29,15 @@ func main() {
 	cfg, err := config.Load(configPath)
 	if err != nil {
 		log.Fatalf("failed to load config: %v", err)
+	}
+
+	// Initialize Nacos client
+	var nacosClient *nacos.NacosClient
+	if cfg.Nacos.Enabled {
+		nacosClient = nacos.NewNacosClient(&cfg.Nacos)
+		if nacosClient != nil {
+			defer nacosClient.Stop()
+		}
 	}
 
 	var redisClient *redis.Client
@@ -64,7 +74,8 @@ func main() {
 	r.GET("/health", healthHandler.Health)
 	r.GET("/api/v1/metrics", metricsHandler.GetMetrics)
 
-	router := proxy.NewRouter(cfg.Routes)
+	router := proxy.NewRouter(cfg.Routes, nacosClient)
+
 	go func() {
 		if err := http.ListenAndServe(":"+cfg.Server.Port, r); err != nil {
 			log.Fatalf("server failed: %v", err)
