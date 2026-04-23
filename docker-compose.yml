@@ -235,6 +235,7 @@ services:
       - "80:80"
     volumes:
       - ./nginx:/etc/nginx/conf.d
+      - ./short-link-log-go/frontend/src:/usr/share/nginx/html
     depends_on:
       - gateway
       - log-frontend
