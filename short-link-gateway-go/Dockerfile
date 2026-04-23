@@ -1,11 +1,10 @@
 FROM golang:1.21-alpine AS builder
 
 WORKDIR /app
-COPY go.mod go.sum ./
-RUN go mod download
-
+COPY go.mod ./
+RUN go mod download 2>/dev/null || true
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -o gateway .
+RUN CGO_ENABLED=0 GOOS=linux go build -mod=mod -o gateway .
 
 FROM alpine:latest
 RUN apk --no-cache add ca-certificates

@@ -1,6 +1,7 @@
 package nacos
 
 import (
+	"fmt"
 	"log"
 	"math/rand"
 	"shortlink-gateway-go/internal/config"
@@ -166,7 +167,11 @@ func (c *NacosClient) GetServiceURL(serviceName string) (string, bool) {
 	}
 
 	instance := instances[rand.Intn(len(instances))]
-	return instance.IP, true
+	address := instance.IP
+	if instance.Port > 0 {
+		address = fmt.Sprintf("%s:%d", address, instance.Port)
+	}
+	return address, true
 }
 
 func (c *NacosClient) Stop() {

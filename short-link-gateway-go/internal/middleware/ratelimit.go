@@ -72,7 +72,7 @@ func (r *RateLimitMiddleware) Handler() gin.HandlerFunc {
 			log.Printf("rate_limit_exceeded path=%s trace_id=%v qps=%d",
 				path, traceID, matched.RateLimit.QPS)
 
-			r.metrics.RecordRequest(c.Request.Method, path, http.StatusTooManyRequests, float64(c.Writer.ElapsedMs()))
+			r.metrics.RecordRequest(c.Request.Method, path, http.StatusTooManyRequests, 0)
 
 			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
 				"error":    "rate_limit_exceeded",

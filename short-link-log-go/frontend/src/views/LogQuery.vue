@@ -11,7 +11,20 @@
           <el-input v-model="filters.keyword" placeholder="搜索关键词" clearable />
         </el-form-item>
         <el-form-item label="服务">
-          <el-input v-model="filters.service" placeholder="服务名" clearable />
+          <el-select
+            v-model="filters.service"
+            placeholder="全部服务"
+            clearable
+            filterable
+            style="width: 180px"
+          >
+            <el-option
+              v-for="svc in serviceOptions"
+              :key="svc"
+              :label="svc"
+              :value="svc"
+            />
+          </el-select>
         </el-form-item>
         <el-form-item label="级别">
           <el-select v-model="filters.level" placeholder="全部" clearable style="width: 120px">
@@ -39,7 +52,7 @@
           <el-tag :type="levelType(row.level)" size="small">{{ row.level }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="service" label="服务" width="140" />
+      <el-table-column prop="service" label="服务" width="160" />
       <el-table-column prop="trace_id" label="TraceID" width="180">
         <template #default="{ row }">
           <el-link type="primary" @click="viewTrace(row.trace_id)" v-if="row.trace_id">{{ row.trace_id.slice(0, 8) }}...</el-link>
@@ -58,7 +71,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { queryLogs } from '../api/index.js'
+import { queryLogs, listServices } from '../api/index.js'
 
 const router = useRouter()
 const loading = ref(false)
@@ -68,6 +81,7 @@ const page = ref(1)
 const pageSize = ref(50)
 const filters = reactive({ keyword: '', service: '', level: '' })
 const timeRange = ref([])
+const serviceOptions = ref([])
 
 const formatTime = (t) => {
   if (!t) return ''
@@ -82,6 +96,15 @@ const viewTrace = (tid) => router.push(`/trace/${tid}`)
 const handleLogout = () => {
   localStorage.removeItem('token')
   router.push('/login')
+}
+
+const fetchServiceOptions = async () => {
+  try {
+    const { data } = await listServices()
+    serviceOptions.value = data.services || []
+  } catch {
+    // silently ignore — not critical
+  }
 }
 
 const fetchLogs = async () => {
@@ -102,7 +125,10 @@ const fetchLogs = async () => {
   }
 }
 
-onMounted(fetchLogs)
+onMounted(() => {
+  fetchServiceOptions()
+  fetchLogs()
+})
 </script>
 
 <style scoped>
@@ -112,3 +138,4 @@ onMounted(fetchLogs)
 .filter-card { margin: 12px; }
 .pagination { display: flex; justify-content: center; padding: 16px 0; }
 </style>
+

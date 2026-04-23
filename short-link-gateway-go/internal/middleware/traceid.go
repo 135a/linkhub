@@ -3,8 +3,9 @@ package middleware
 import (
 	"encoding/binary"
 	"encoding/hex"
+	"log"
 	"math/rand"
-	"sync"
+	logclient "shortlink-gateway-go/internal/log"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -40,20 +41,52 @@ func TraceIDInjector() gin.HandlerFunc {
 	}
 }
 
-func AccessLogger(mc interface{}) gin.HandlerFunc {
+func AccessLogger(mc interface{}, logClient interface{}) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		traceID, _ := c.Get("trace_id")
-		tid, _ := traceID.(string)
-
+		start := time.Now()
 		c.Next()
+		latency := time.Since(start).Milliseconds()
 
 		// record metrics
 		if mc != nil {
 			if collector, ok := mc.(interface {
 				RecordRequest(string, string, int, float64)
 			}); ok {
-				latency := float64(c.Writer.ElapsedMs())
-				collector.RecordRequest(c.Request.Method, c.Request.URL.Path, c.Writer.Status(), latency)
+				collector.RecordRequest(c.Request.Method, c.Request.URL.Path, c.Writer.Status(), float64(latency))
+			}
+		}
+
+		// get trace ID
+		traceID, exists := c.Get("trace_id")
+		if !exists {
+			traceID = ""
+		}
+
+		// log access details
+		log.Printf("[ACCESS] %s %s %d %dms %s",
+			c.Request.Method,
+			c.Request.URL.Path,
+			c.Writer.Status(),
+			latency,
+			traceID,
+		)
+
+		// send to log collector
+		if logClient != nil {
+			if client, ok := logClient.(interface {
+				Send(logclient.LogEntry)
+			}); ok {
+				client.Send(logclient.LogEntry{
+					Level:     "info",
+					Timestamp: time.Now(),
+					Message:   "Access log",
+					Service:   "gateway",
+					TraceID:   traceID.(string),
+					Method:    c.Request.Method,
+					Path:      c.Request.URL.Path,
+					Status:    c.Writer.Status(),
+					Latency:   latency,
+				})
 			}
 		}
 	}

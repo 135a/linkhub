@@ -11,13 +11,13 @@ nacos:
 
 routes:
   - path_prefix: "/api/v1/shortlink"
-    service_name: "shortlink-project"
+    service_name: "short-link-project"
     default_target: "http://project:8001"
     rate_limit:
       enabled: true
       qps: 1000
   - path_prefix: "/api/v1/user"
-    service_name: "shortlink-admin"
+    service_name: "short-link-admin"
     default_target: "http://admin:8002"
     rate_limit:
       enabled: true
@@ -33,6 +33,8 @@ cors:
   allowed_origins:
     - "http://localhost:3000"
     - "http://localhost:8080"
+    - "http://linkhub.nym.asia"
+    - "http://log.nym.asia"
   allowed_methods:
     - "GET"
     - "POST"
@@ -49,7 +51,6 @@ cors:
   allow_credentials: true
   max_age: 86400
 
-log:
-  logstash_host: "log-collector"
-  logstash_port: 8081
+log_collector:
+  endpoint: http://linkhub-log-collector:8081/api/v1/logs/ingest
   level: "info"

@@ -36,6 +36,10 @@ export function queryLogs(params) {
   return api.get('/logs/query', { params })
 }
 
+export function listServices() {
+  return api.get('/logs/services')
+}
+
 export function healthCheck() {
   return api.get('/health')
 }

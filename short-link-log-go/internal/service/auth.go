@@ -2,7 +2,6 @@ package service
 
 import (
 	"fmt"
-	"shortlink-log-go/internal/model"
 	"shortlink-log-go/internal/store"
 	"time"
 

@@ -92,9 +92,9 @@
         </dependency>
 
         <dependency>
-            <groupId>com.nym.shortlink</groupId>
+            <groupId>com.nageoffer.shortlink</groupId>
             <artifactId>shortlink-trace-starter</artifactId>
-            <version>1.0.0</version>
+            <version>${project.version}</version>
         </dependency>
     </dependencies>
 

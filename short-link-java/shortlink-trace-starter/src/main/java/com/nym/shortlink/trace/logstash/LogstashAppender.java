@@ -27,7 +27,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 public class LogstashAppender {
 
     private static final Logger logger = LoggerFactory.getLogger(LogstashAppender.class);
-    private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS")
+    private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ISO_OFFSET_DATE_TIME
             .withZone(ZoneId.systemDefault());
 
     @Value("${trace.logstash.host:shortlink-log-go}")
@@ -38,6 +38,8 @@ public class LogstashAppender {
 
     @Value("${trace.logstash.enabled:true}")
     private boolean enabled;
+
+    private String applicationName = "shortlink-unknown";
 
     private final BlockingQueue<Map<String, Object>> logQueue = new LinkedBlockingQueue<>(10000);
     private final ObjectMapper objectMapper;
@@ -50,8 +52,30 @@ public class LogstashAppender {
 
     @PostConstruct
     public void init() {
+        // Resolve service name from env var first, then Spring property, then fallback
+        String envName = System.getenv("SPRING_APPLICATION_NAME");
+        String propName = System.getProperty("spring.application.name");
+        if (envName != null && !envName.isBlank()) {
+            applicationName = envName;
+        } else if (propName != null && !propName.isBlank()) {
+            applicationName = propName;
+        }
         if (enabled) {
-            logger.info("Logstash appender initialized, target: {}:{}", logstashHost, logstashPort);
+            logger.info("Logstash appender initialized, service={}, target: {}:{}", applicationName, logstashHost, logstashPort);
+            ch.qos.logback.classic.Logger rootLogger = (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME);
+            ch.qos.logback.core.AppenderBase<ch.qos.logback.classic.spi.ILoggingEvent> appender = new ch.qos.logback.core.AppenderBase<ch.qos.logback.classic.spi.ILoggingEvent>() {
+                @Override
+                protected void append(ch.qos.logback.classic.spi.ILoggingEvent event) {
+                    if (!enabled || event.getLoggerName().equals(LogstashAppender.class.getName())) return;
+                    String level = event.getLevel().toString();
+                    String message = event.getFormattedMessage();
+                    Map<String, String> mdc = event.getMDCPropertyMap();
+                    LogstashAppender.this.append(level, message, mdc);
+                }
+            };
+            appender.setContext(rootLogger.getLoggerContext());
+            appender.start();
+            rootLogger.addAppender(appender);
         }
     }
 
@@ -63,9 +87,9 @@ public class LogstashAppender {
         Map<String, Object> logEntry = new HashMap<>();
         logEntry.put("level", level);
         logEntry.put("timestamp", FORMATTER.format(Instant.now()));
-        logEntry.put("service", getServiceName());
-        logEntry.put("message", message);
-        logEntry.put("@timestamp", Instant.now().toString());
+        logEntry.put("service", applicationName);
+        String msg = message != null && !message.trim().isEmpty() ? message : "-";
+        logEntry.put("message", msg);
 
         if (mdc != null) {
             logEntry.putAll(mdc);
@@ -98,7 +122,7 @@ public class LogstashAppender {
             conn.setRequestProperty("Content-Type", "application/json");
             conn.setDoOutput(true);
 
-            String json = objectMapper.writeValueAsString(Map.of("logs", logs));
+            String json = objectMapper.writeValueAsString(logs);
             try (OutputStream os = conn.getOutputStream()) {
                 os.write(json.getBytes(StandardCharsets.UTF_8));
             }
@@ -112,8 +136,5 @@ public class LogstashAppender {
         }
     }
 
-    private String getServiceName() {
-        String name = System.getProperty("spring.application.name");
-        return name != null ? name : "shortlink-unknown";
-    }
+
 }

@@ -8,6 +8,7 @@ import (
 	"os/signal"
 	"shortlink-gateway-go/internal/config"
 	"shortlink-gateway-go/internal/handler"
+	logclient "shortlink-gateway-go/internal/log"
 	"shortlink-gateway-go/internal/metrics"
 	"shortlink-gateway-go/internal/middleware"
 	"shortlink-gateway-go/internal/nacos"
@@ -56,6 +57,7 @@ func main() {
 	}
 
 	mc := metrics.NewMetricsCollector()
+	logClient := logclient.NewLogClient(cfg)
 	rl := ratelimit.NewRateLimiter(redisClient)
 	healthHandler := handler.NewHealthHandler()
 	metricsHandler := handler.NewMetricsHandler(mc)
@@ -66,7 +68,7 @@ func main() {
 
 	r.Use(middleware.CORS())
 	r.Use(middleware.TraceIDInjector())
-	r.Use(middleware.AccessLogger(mc))
+	r.Use(middleware.AccessLogger(mc, logClient))
 
 	rateLimitMw := middleware.NewRateLimitMiddleware(rl, mc, cfg.Routes)
 	r.Use(rateLimitMw.Handler())
@@ -74,7 +76,12 @@ func main() {
 	r.GET("/health", healthHandler.Health)
 	r.GET("/api/v1/metrics", metricsHandler.GetMetrics)
 
-	router := proxy.NewRouter(cfg.Routes, nacosClient)
+	// Initialize router for proxying
+	proxyRouter := proxy.NewRouter(cfg.Routes, nacosClient)
+	// Add proxy handler
+	r.NoRoute(func(c *gin.Context) {
+		proxyRouter.ServeHTTP(c.Writer, c.Request)
+	})
 
 	go func() {
 		if err := http.ListenAndServe(":"+cfg.Server.Port, r); err != nil {

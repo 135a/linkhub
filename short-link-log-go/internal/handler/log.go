@@ -53,3 +53,16 @@ func (h *LogHandler) Query(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, resp)
 }
+
+func (h *LogHandler) ListServices(c *gin.Context) {
+	services, err := h.svc.ListServices()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list services"})
+		return
+	}
+	if services == nil {
+		services = []string{}
+	}
+	c.JSON(http.StatusOK, gin.H{"services": services})
+}
+

@@ -240,7 +240,9 @@ services:
       - "8081:8081"
     environment:
       - CLICKHOUSE_HOST=clickhouse
-      - CLICKHOUSE_PORT=8123
+      - CLICKHOUSE_PORT=9000
+      - CLICKHOUSE_USER=default
+      - CLICKHOUSE_PASSWORD=
       - MYSQL_HOST=mysql
       - MYSQL_PORT=3306
       - MYSQL_USER=root
@@ -284,11 +286,30 @@ services:
       context: ./short-link-java
       dockerfile: console-vue/Dockerfile
     container_name: linkhub-frontend
-    ports:
-      - "80:80"
     depends_on:
       gateway:
         condition: service_started
+    networks:
+      - linkhub-network
+    deploy:
+      resources:
+        limits:
+          memory: 128m
+        reservations:
+          memory: 64m
+    restart: unless-stopped
+
+  nginx-proxy:
+    image: nginx:latest
+    container_name: linkhub-nginx-proxy
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx:/etc/nginx/conf.d
+    depends_on:
+      - gateway
+      - log-frontend
+      - frontend
     networks:
       - linkhub-network
     deploy:

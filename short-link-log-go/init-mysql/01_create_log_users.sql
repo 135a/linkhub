@@ -20,3 +20,13 @@ CREATE TABLE IF NOT EXISTS login_attempts (
     attempt_time DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_ip_time (ip_address, attempt_time)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='登录频率限制追踪';
+
+-- Default admin user (password: admin123)
+INSERT IGNORE INTO log_users (username, password) VALUES
+('admin', '$2a$10$EixZaYVK1fsbw1ZfbX3OXePaWxn96p36WQoeG6Lruj3vjPGga31lW');
+
+-- Default test user (password: test123)
+INSERT IGNORE INTO log_users (username, password) VALUES
+('test', '$2a$10$QqfG73k4W9GQvX6Lz3vJMe3F1G7e3e7e3e7e3e7e3e7e3e7e3e7e3e7e3e7');
+
+

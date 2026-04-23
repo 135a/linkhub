@@ -1,4 +1,4 @@
-package shortlink
+package main
 
 import (
 	"encoding/json"

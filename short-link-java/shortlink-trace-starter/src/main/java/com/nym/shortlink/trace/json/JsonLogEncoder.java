@@ -51,17 +51,21 @@ public class JsonLogEncoder extends EncoderBase<ILoggingEvent> {
     }
 
     private String getServiceName() {
+        String envName = System.getenv("SPRING_APPLICATION_NAME");
+        if (envName != null && !envName.trim().isEmpty()) {
+            return envName;
+        }
         String name = System.getProperty("spring.application.name");
         return name != null ? name : "shortlink-unknown";
     }
 
     @Override
-    public void init(OutputStream outputStream) {
-        super.init(outputStream);
+    public byte[] headerBytes() {
+        return null;
     }
 
     @Override
-    public void close() {
-        super.close();
+    public byte[] footerBytes() {
+        return null;
     }
 }

@@ -9,12 +9,12 @@ import (
 )
 
 type Config struct {
-	Server   ServerConfig    `yaml:"server"`
-	Nacos    NacosConfig     `yaml:"nacos"`
-	Routes   []RouteConfig   `yaml:"routes"`
-	Redis    RedisConfig     `yaml:"redis"`
-	CORS     CORSConfig      `yaml:"cors"`
-	Log      LogConfig       `yaml:"log"`
+	Server       ServerConfig       `yaml:"server"`
+	Nacos        NacosConfig        `yaml:"nacos"`
+	Routes       []RouteConfig      `yaml:"routes"`
+	Redis        RedisConfig        `yaml:"redis"`
+	CORS         CORSConfig         `yaml:"cors"`
+	LogCollector LogCollectorConfig `yaml:"log_collector"`
 }
 
 type ServerConfig struct {
@@ -59,10 +59,9 @@ type CORSConfig struct {
 	MaxAge           int      `yaml:"max_age"`
 }
 
-type LogConfig struct {
-	LogstashHost string `yaml:"logstash_host"`
-	LogstashPort string `yaml:"logstash_port"`
-	Level        string `yaml:"level"`
+type LogCollectorConfig struct {
+	Endpoint string `yaml:"endpoint"`
+	Level    string `yaml:"level"`
 }
 
 var (
@@ -107,6 +106,6 @@ func GetRedisAddr() string {
 	return fmt.Sprintf("%s:%d", cfg.Redis.Host, cfg.Redis.Port)
 }
 
-func GetLogstashURL() string {
-	return fmt.Sprintf("http://%s:%s", cfg.Log.LogstashHost, cfg.Log.LogstashPort)
+func GetLogCollectorEndpoint() string {
+	return cfg.LogCollector.Endpoint
 }

@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"fmt"
+	"log"
 	"shortlink-log-go/internal/model"
 	"strings"
 	"time"
@@ -16,13 +17,13 @@ type ClickHouseStore struct {
 	ch   chan model.LogEntry
 }
 
-func NewClickHouseStore(host, port string) (*ClickHouseStore, error) {
+func NewClickHouseStore(host, port, user, password string) (*ClickHouseStore, error) {
 	conn, err := clickhouse.Open(&clickhouse.Options{
 		Addr: []string{fmt.Sprintf("%s:%s", host, port)},
 		Auth: clickhouse.Auth{
 			Database: "default",
-			Username: "default",
-			Password: "",
+			Username: user,
+			Password: password,
 		},
 		Settings: map[string]interface{}{
 			"async_insert":          1,
@@ -78,12 +79,15 @@ func (s *ClickHouseStore) batchLoop() {
 func (s *ClickHouseStore) flush(batch []model.LogEntry) {
 	b, err := s.conn.PrepareBatch(context.Background(), "INSERT INTO logs (timestamp, level, service, trace_id, thread, message, fields)")
 	if err != nil {
+		log.Printf("[WARN] clickhouse prepare batch failed: %v", err)
 		return
 	}
 	for _, e := range batch {
 		b.Append(e.Timestamp, e.Level, e.Service, e.TraceID, e.Thread, e.Message, e.Fields)
 	}
-	b.Send()
+	if err := b.Send(); err != nil {
+		log.Printf("[WARN] clickhouse batch send failed: %v", err)
+	}
 }
 
 func (s *ClickHouseStore) Query(req model.LogQueryRequest) (*model.LogQueryResponse, error) {
@@ -120,9 +124,13 @@ func (s *ClickHouseStore) Query(req model.LogQueryRequest) (*model.LogQueryRespo
 		whereClause = " WHERE " + strings.Join(where, " AND ")
 	}
 
-	var total int64
+	var total uint64
 	countSQL := "SELECT count() FROM logs" + whereClause
-	s.conn.QueryRow(context.Background(), countSQL, args...).Scan(&total)
+	err := s.conn.QueryRow(context.Background(), countSQL, args...).Scan(&total)
+	if err != nil {
+		log.Printf("[ERROR] clickhouse count query failed: %v", err)
+		return nil, fmt.Errorf("count query failed: %w", err)
+	}
 
 	page := req.Page
 	if page < 1 {
@@ -141,7 +149,8 @@ func (s *ClickHouseStore) Query(req model.LogQueryRequest) (*model.LogQueryRespo
 
 	rows, err := s.conn.Query(context.Background(), querySQL, args...)
 	if err != nil {
-		return nil, err
+		log.Printf("[ERROR] clickhouse data query failed: %v", err)
+		return nil, fmt.Errorf("data query failed: %w", err)
 	}
 	defer rows.Close()
 
@@ -153,8 +162,25 @@ func (s *ClickHouseStore) Query(req model.LogQueryRequest) (*model.LogQueryRespo
 	}
 
 	return &model.LogQueryResponse{
-		Total: total,
+		Total: int64(total),
 		Logs:  logs,
 		Page:  page,
 	}, nil
 }
+
+func (s *ClickHouseStore) ListServices() ([]string, error) {
+	rows, err := s.conn.Query(context.Background(),
+		"SELECT DISTINCT service FROM logs WHERE service != '' ORDER BY service")
+	if err != nil {
+		return nil, fmt.Errorf("list services failed: %w", err)
+	}
+	defer rows.Close()
+	var services []string
+	for rows.Next() {
+		var svc string
+		rows.Scan(&svc)
+		services = append(services, svc)
+	}
+	return services, nil
+}
+

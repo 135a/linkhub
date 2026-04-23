@@ -9,7 +9,7 @@ spring:
     url: jdbc:shardingsphere:classpath:shardingsphere-config-${database.env:dev}.yaml
   data:
     redis:
-      host: 127.0.0.1
+      host: linkhub-redis
       port: 6379
 #      password: 123456
   mvc:
@@ -19,7 +19,7 @@ spring:
   cloud:
     nacos:
       discovery:
-        server-addr: 127.0.0.1:8848
+        server-addr: linkhub-nacos:8848
 
 short-link:
   domain:
@@ -42,7 +42,7 @@ mybatis-plus:
     log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
   mapper-locations: classpath:mapper/*.xml
 rocketmq:
-  name-server: ${ROCKETMQ_NAME_SERVER:127.0.0.1:9876}
+  name-server: ${ROCKETMQ_NAME_SERVER:linkhub-rmqnamesrv:9876}
   producer:
     group: short-link_project-service_stats-save_pg
     topic: short-link_project-service_topic

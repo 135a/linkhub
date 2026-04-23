@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"fmt"
 	"net/http"
 	"shortlink-gateway-go/internal/config"
 
@@ -62,5 +63,5 @@ func joinStrings(strs []string, sep string) string {
 }
 
 func intToString(i int) string {
-	return string(rune('0'+i))
+	return fmt.Sprintf("%d", i)
 }

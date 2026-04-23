@@ -22,3 +22,8 @@ func (s *LogService) Ingest(entries []model.LogEntry) {
 func (s *LogService) Query(req model.LogQueryRequest) (*model.LogQueryResponse, error) {
 	return s.chStore.Query(req)
 }
+
+func (s *LogService) ListServices() ([]string, error) {
+	return s.chStore.ListServices()
+}
+

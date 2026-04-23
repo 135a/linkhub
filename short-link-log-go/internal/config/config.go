@@ -4,9 +4,11 @@ import "os"
 
 type Config struct {
 	Port           string
-	ClickHouseHost string
-	ClickHousePort string
-	MySQLHost      string
+	ClickHouseHost     string
+	ClickHousePort     string
+	ClickHouseUser     string
+	ClickHousePassword string
+	MySQLHost          string
 	MySQLPort      string
 	MySQLUser      string
 	MySQLPassword  string
@@ -17,8 +19,10 @@ type Config struct {
 func Load() *Config {
 	return &Config{
 		Port:           getEnv("PORT", "8081"),
-		ClickHouseHost: getEnv("CLICKHOUSE_HOST", "localhost"),
-		ClickHousePort: getEnv("CLICKHOUSE_PORT", "8123"),
+		ClickHouseHost:     getEnv("CLICKHOUSE_HOST", "localhost"),
+		ClickHousePort:     getEnv("CLICKHOUSE_PORT", "9000"),
+		ClickHouseUser:     getEnv("CLICKHOUSE_USER", "default"),
+		ClickHousePassword: getEnv("CLICKHOUSE_PASSWORD", ""),
 		MySQLHost:      getEnv("MYSQL_HOST", "localhost"),
 		MySQLPort:      getEnv("MYSQL_PORT", "3306"),
 		MySQLUser:      getEnv("MYSQL_USER", "root"),

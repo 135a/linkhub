@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"shortlink-log-go/internal/model"
 	"time"
+
+	_ "github.com/go-sql-driver/mysql"
 )
 
 type MySQLStore struct {
