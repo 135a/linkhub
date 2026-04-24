@@ -49,20 +49,34 @@ rocketmq:
   name-server: ${ROCKETMQ_NAME_SERVER:linkhub-rmqnamesrv:9876}
   producer:
     group: short-link_project-service_stats-save_pg
+    tx-group: short-link_project-service_tx-init_pg
     topic: short-link_project-service_topic
+    tx-topic: short-link_project-service_tx-init_topic
     favicon-topic: short-link_project-service_favicon-update_topic
+    cache-delete-topic: short-link_project-service_cache-delete_topic
     send-message-timeout: 2000
     retry-times-when-send-failed: 1
     retry-times-when-send-async-failed: 1
   consumer:
     group: short-link_project-service_stats-save_cg
+    tx-init-group: short-link_project-service_tx-init_cg
     favicon-group: short-link_project-service_favicon-update_cg
+    cache-delete-group: short-link_project-service_cache-delete_cg
+    cache-delete-max-reconsume-times: 5
+
+cache:
+  lock:
+    shard-count: 256
+  consistency:
+    audit-enabled: true
+    audit-interval-ms: 3600000
+    sample-size: 100
 
 management:
   endpoints:
     web:
       exposure:
-        include: health,metrics
+        include: health,metrics,prometheus
   metrics:
     distribution:
       percentiles-histogram:

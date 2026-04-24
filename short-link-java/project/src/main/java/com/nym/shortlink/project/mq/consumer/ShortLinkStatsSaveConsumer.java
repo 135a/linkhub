@@ -28,13 +28,12 @@ import com.nym.shortlink.project.dao.entity.*;
 import com.nym.shortlink.project.dao.mapper.*;
 import com.nym.shortlink.project.dto.biz.ShortLinkStatsRecordDTO;
 import com.nym.shortlink.project.mq.idempotent.MessageQueueIdempotentHandler;
+import com.nym.shortlink.project.service.lock.ShortLinkLockService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.rocketmq.spring.annotation.RocketMQMessageListener;
 import org.apache.rocketmq.spring.core.RocketMQListener;
 import org.redisson.api.RLock;
-import org.redisson.api.RReadWriteLock;
-import org.redisson.api.RedissonClient;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -43,7 +42,6 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 
-import static com.nym.shortlink.project.common.constant.RedisKeyConstant.LOCK_GID_UPDATE_KEY;
 import static com.nym.shortlink.project.common.constant.ShortLinkConstant.AMAP_REMOTE_URL;
 
 /**
@@ -60,7 +58,7 @@ public class ShortLinkStatsSaveConsumer implements RocketMQListener<Map<String, 
 
     private final ShortLinkMapper shortLinkMapper;
     private final ShortLinkGotoMapper shortLinkGotoMapper;
-    private final RedissonClient redissonClient;
+    private final ShortLinkLockService shortLinkLockService;
     private final LinkAccessStatsMapper linkAccessStatsMapper;
     private final LinkLocaleStatsMapper linkLocaleStatsMapper;
     private final LinkOsStatsMapper linkOsStatsMapper;
@@ -102,8 +100,7 @@ public class ShortLinkStatsSaveConsumer implements RocketMQListener<Map<String, 
 
     public void actualSaveShortLinkStats(String fullShortUrl, String gid, ShortLinkStatsRecordDTO statsRecord) {
         fullShortUrl = Optional.ofNullable(fullShortUrl).orElse(statsRecord.getFullShortUrl());
-        RReadWriteLock readWriteLock = redissonClient.getReadWriteLock(String.format(LOCK_GID_UPDATE_KEY, fullShortUrl));
-        RLock rLock = readWriteLock.readLock();
+        RLock rLock = shortLinkLockService.gidUpdateReadLock(fullShortUrl);
         rLock.lock();
         try {
             if (StrUtil.isBlank(gid)) {

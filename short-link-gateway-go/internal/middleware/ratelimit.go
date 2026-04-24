@@ -12,7 +12,7 @@ import (
 )
 
 type RateLimitMiddleware struct {
-	limiter   *ratelimit.RateLimiter
+	limiter   ratelimit.Limiter
 	metrics   *metrics.MetricsCollector
 	prefixes  []rlPrefix // sorted by length desc for longest-prefix match
 }
@@ -22,7 +22,7 @@ type rlPrefix struct {
 	Config *config.RouteConfig
 }
 
-func NewRateLimitMiddleware(limiter *ratelimit.RateLimiter, mc *metrics.MetricsCollector, routes []config.RouteConfig) *RateLimitMiddleware {
+func NewRateLimitMiddleware(limiter ratelimit.Limiter, mc *metrics.MetricsCollector, routes []config.RouteConfig) *RateLimitMiddleware {
 	prefixes := make([]rlPrefix, 0, len(routes))
 	for i := range routes {
 		if routes[i].RateLimit.Enabled {

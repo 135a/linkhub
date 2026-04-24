@@ -129,7 +129,8 @@ services:
       # Nacos 服务发现已关停；admin 通过 Feign URL override 直连 project。
       - SPRING_CLOUD_NACOS_DISCOVERY_ENABLED=false
       - AGGREGATION_REMOTE_URL=http://project:8001
-      - JAVA_OPTS=-Xms192m -Xmx288m -XX:MaxMetaspaceSize=128m
+      - JVM_PROFILE=g1
+      - JAVA_OPTS_EXTRA=-Xms192m -Xmx288m -XX:MaxMetaspaceSize=128m
     depends_on:
       mysql:
         condition: service_healthy
@@ -186,10 +187,11 @@ services:
       - SPRING_PROFILES_ACTIVE=dev
       - SPRING_DATA_REDIS_HOST=redis
       - SPRING_CLOUD_NACOS_DISCOVERY_ENABLED=false
+      - JVM_PROFILE=g1
       - ROCKETMQ_NAME_SERVER=rocketmq-namesrv:9876
       - TRACE_LOGSTASH_HOST=log-collector
       - TRACE_LOGSTASH_PORT=8081
-      - JAVA_OPTS=-Xms256m -Xmx384m -XX:MaxMetaspaceSize=128m
+      - JAVA_OPTS_EXTRA=-Xms256m -Xmx384m -XX:MaxMetaspaceSize=128m
       # Production public short-link host (no scheme); adjust to your DNS (e.g. link.nym.asia).
       - SHORT_LINK_DOMAIN_DEFAULT=link.nym.asia
       - SHORT_LINK_PUBLIC_SCHEME=https

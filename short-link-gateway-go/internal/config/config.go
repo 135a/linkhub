@@ -12,6 +12,7 @@ type Config struct {
 	Server       ServerConfig       `yaml:"server"`
 	Nacos        NacosConfig        `yaml:"nacos"`
 	Routes       []RouteConfig      `yaml:"routes"`
+	RateLimit    RateLimitGlobal    `yaml:"ratelimit"`
 	Redis        RedisConfig        `yaml:"redis"`
 	CORS         CORSConfig         `yaml:"cors"`
 	LogCollector LogCollectorConfig `yaml:"log_collector"`
@@ -41,6 +42,10 @@ type RouteConfig struct {
 type RateLimitConfig struct {
 	Enabled bool `yaml:"enabled"`
 	QPS     int  `yaml:"qps"`
+}
+
+type RateLimitGlobal struct {
+	Algorithm string `yaml:"algorithm"`
 }
 
 type RedisConfig struct {
@@ -93,6 +98,12 @@ func Load(path string) (*Config, error) {
 		}
 		if cfg.Nacos.RefreshInterval == 0 {
 			cfg.Nacos.RefreshInterval = 30
+		}
+		if cfg.RateLimit.Algorithm == "" {
+			cfg.RateLimit.Algorithm = "token_bucket"
+		}
+		if envAlgorithm := os.Getenv("RATELIMIT_ALGORITHM"); envAlgorithm != "" {
+			cfg.RateLimit.Algorithm = envAlgorithm
 		}
 	})
 	return cfg, loadErr

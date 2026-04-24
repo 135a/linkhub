@@ -58,7 +58,8 @@ func main() {
 
 	mc := metrics.NewMetricsCollector()
 	logClient := logclient.NewLogClient(cfg)
-	rl := ratelimit.NewRateLimiter(redisClient)
+	rl := ratelimit.NewLimiter(cfg.RateLimit.Algorithm, redisClient)
+	log.Printf("rate limiter algorithm=%s", rl.Algorithm())
 	healthHandler := handler.NewHealthHandler()
 	metricsHandler := handler.NewMetricsHandler(mc)
 

@@ -9,6 +9,11 @@ import (
 	"github.com/go-redis/redis/v8"
 )
 
+type Limiter interface {
+	Allow(key string, qps int) (bool, error)
+	Algorithm() string
+}
+
 type TokenBucket struct {
 	mu       sync.Mutex
 	capacity int
@@ -52,7 +57,7 @@ func (tb *TokenBucket) Remaining() float64 {
 	return tb.tokens
 }
 
-type RateLimiter struct {
+type TokenBucketRateLimiter struct {
 	mu           sync.RWMutex
 	buckets      map[string]*TokenBucket
 	redisClient  *redis.Client
@@ -60,8 +65,8 @@ type RateLimiter struct {
 	ctx          context.Context
 }
 
-func NewRateLimiter(redisClient *redis.Client) *RateLimiter {
-	rl := &RateLimiter{
+func NewTokenBucketRateLimiter(redisClient *redis.Client) *TokenBucketRateLimiter {
+	rl := &TokenBucketRateLimiter{
 		buckets:     make(map[string]*TokenBucket),
 		redisClient: redisClient,
 		ctx:         context.Background(),
@@ -72,7 +77,15 @@ func NewRateLimiter(redisClient *redis.Client) *RateLimiter {
 	return rl
 }
 
-func (rl *RateLimiter) Allow(key string, qps int) (bool, error) {
+func NewRateLimiter(redisClient *redis.Client) *TokenBucketRateLimiter {
+	return NewTokenBucketRateLimiter(redisClient)
+}
+
+func (rl *TokenBucketRateLimiter) Algorithm() string {
+	return "token_bucket"
+}
+
+func (rl *TokenBucketRateLimiter) Allow(key string, qps int) (bool, error) {
 	rl.mu.RLock()
 	bucket, exists := rl.buckets[key]
 	rl.mu.RUnlock()
@@ -97,7 +110,7 @@ func (rl *RateLimiter) Allow(key string, qps int) (bool, error) {
 	return false, nil
 }
 
-func (rl *RateLimiter) allowRedis(key string, qps int) (bool, error) {
+func (rl *TokenBucketRateLimiter) allowRedis(key string, qps int) (bool, error) {
 	redisKey := fmt.Sprintf("ratelimit:%s", key)
 
 	allowed, err := rl.redisClient.SetNX(rl.ctx, redisKey, 1, time.Second).Result()
@@ -123,7 +136,7 @@ func (rl *RateLimiter) allowRedis(key string, qps int) (bool, error) {
 	return allowed, nil
 }
 
-func (rl *RateLimiter) GetRemaining(key string) float64 {
+func (rl *TokenBucketRateLimiter) GetRemaining(key string) float64 {
 	rl.mu.RLock()
 	defer rl.mu.RUnlock()
 

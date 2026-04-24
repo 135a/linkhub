@@ -2,10 +2,12 @@ package store
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"shortlink-log-go/internal/model"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	clickhouse "github.com/ClickHouse/clickhouse-go/v2"
@@ -13,8 +15,16 @@ import (
 )
 
 type ClickHouseStore struct {
-	conn driver.Conn
-	ch   chan model.LogEntry
+	conn         driver.Conn
+	ch           chan model.LogEntry
+	wal          *WAL
+	warnInterval time.Duration
+	lastWarnAt   int64
+	writeSuccess atomic.Int64
+	writeFail    atomic.Int64
+	droppedCount atomic.Int64
+	walPending   atomic.Int64
+	channelUsage atomic.Int64 // percentage [0,100]
 }
 
 func NewClickHouseStore(host, port, user, password string) (*ClickHouseStore, error) {
@@ -35,10 +45,16 @@ func NewClickHouseStore(host, port, user, password string) (*ClickHouseStore, er
 	}
 
 	s := &ClickHouseStore{
-		conn: conn,
-		ch:   make(chan model.LogEntry, 10000),
+		conn:         conn,
+		ch:           make(chan model.LogEntry, 10000),
+		wal:          NewWAL("./data/wal.log", 100*1024*1024),
+		warnInterval: 5 * time.Second,
+	}
+	if err := s.recoverFromWAL(); err != nil {
+		log.Printf("[WARN] recover wal failed during startup: %v", err)
 	}
 	go s.batchLoop()
+	go s.channelMonitorLoop()
 	return s, nil
 }
 
@@ -47,10 +63,20 @@ func (s *ClickHouseStore) Ping() error {
 }
 
 func (s *ClickHouseStore) Buffer(entry model.LogEntry) {
+	capacity := cap(s.ch)
+	if capacity == 0 {
+		return
+	}
+	usagePct := float64(len(s.ch)) / float64(capacity) * 100
+	if usagePct >= 95 {
+		s.droppedCount.Add(1)
+		return
+	}
+
 	select {
 	case s.ch <- entry:
 	default:
-		// buffer full, drop silently to avoid blocking hot path
+		s.droppedCount.Add(1)
 	}
 }
 
@@ -77,17 +103,28 @@ func (s *ClickHouseStore) batchLoop() {
 }
 
 func (s *ClickHouseStore) flush(batch []model.LogEntry) {
+	if len(batch) == 0 {
+		return
+	}
+	if err := s.recoverFromWAL(); err != nil {
+		log.Printf("[WARN] recover wal before flush failed: %v", err)
+	}
+
 	b, err := s.conn.PrepareBatch(context.Background(), "INSERT INTO logs (timestamp, level, service, trace_id, thread, message, fields)")
 	if err != nil {
-		log.Printf("[WARN] clickhouse prepare batch failed: %v", err)
+		s.writeFail.Add(int64(len(batch)))
+		s.appendWAL(batch, err)
 		return
 	}
 	for _, e := range batch {
 		b.Append(e.Timestamp, e.Level, e.Service, e.TraceID, e.Thread, e.Message, e.Fields)
 	}
 	if err := b.Send(); err != nil {
-		log.Printf("[WARN] clickhouse batch send failed: %v", err)
+		s.writeFail.Add(int64(len(batch)))
+		s.appendWAL(batch, err)
+		return
 	}
+	s.writeSuccess.Add(int64(len(batch)))
 }
 
 func (s *ClickHouseStore) Query(req model.LogQueryRequest) (*model.LogQueryResponse, error) {
@@ -181,3 +218,90 @@ func (s *ClickHouseStore) ListServices() ([]string, error) {
 	return services, nil
 }
 
+func (s *ClickHouseStore) appendWAL(batch []model.LogEntry, reason error) {
+	written, err := s.wal.AppendBatch(batch)
+	if err != nil {
+		if errors.Is(err, ErrWALLimitReached) {
+			s.droppedCount.Add(int64(len(batch)))
+			log.Printf("[ERROR] clickhouse flush failed and wal limit reached, dropped=%d reason=%v", len(batch), reason)
+			return
+		}
+		s.droppedCount.Add(int64(len(batch)))
+		log.Printf("[ERROR] clickhouse flush failed and wal append failed, dropped=%d reason=%v wal_err=%v", len(batch), reason, err)
+		return
+	}
+	s.walPending.Add(int64(written))
+	log.Printf("[WARN] clickhouse flush failed, appended wal entries=%d reason=%v", written, reason)
+}
+
+func (s *ClickHouseStore) recoverFromWAL() error {
+	entries, err := s.wal.ReadAll()
+	if err != nil {
+		return err
+	}
+	if len(entries) == 0 {
+		return nil
+	}
+
+	if err := s.insertBatch(entries); err != nil {
+		return fmt.Errorf("insert wal entries: %w", err)
+	}
+	if err := s.wal.Delete(); err != nil {
+		return fmt.Errorf("delete wal file: %w", err)
+	}
+	s.walPending.Store(0)
+	log.Printf("[INFO] recovered wal entries=%d", len(entries))
+	return nil
+}
+
+func (s *ClickHouseStore) insertBatch(batch []model.LogEntry) error {
+	b, err := s.conn.PrepareBatch(context.Background(), "INSERT INTO logs (timestamp, level, service, trace_id, thread, message, fields)")
+	if err != nil {
+		return err
+	}
+	for _, e := range batch {
+		b.Append(e.Timestamp, e.Level, e.Service, e.TraceID, e.Thread, e.Message, e.Fields)
+	}
+	return b.Send()
+}
+
+func (s *ClickHouseStore) channelMonitorLoop() {
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		capacity := cap(s.ch)
+		if capacity == 0 {
+			s.channelUsage.Store(0)
+			continue
+		}
+		usagePct := float64(len(s.ch)) / float64(capacity) * 100
+		usageInt := int64(usagePct)
+		s.channelUsage.Store(usageInt)
+		if usagePct >= 80 {
+			now := time.Now().UnixNano()
+			last := atomic.LoadInt64(&s.lastWarnAt)
+			if now-last >= s.warnInterval.Nanoseconds() && atomic.CompareAndSwapInt64(&s.lastWarnAt, last, now) {
+				log.Printf("[WARN] channel usage high usage_pct=%.2f len=%d cap=%d", usagePct, len(s.ch), capacity)
+			}
+		}
+	}
+}
+
+type WriteMetrics struct {
+	WriteSuccessTotal int64 `json:"write_success_total"`
+	WriteFailTotal    int64 `json:"write_fail_total"`
+	WALPending        int64 `json:"wal_pending"`
+	ChannelUsagePct   int64 `json:"channel_usage_pct"`
+	DroppedTotal      int64 `json:"dropped_count"`
+}
+
+func (s *ClickHouseStore) Metrics() WriteMetrics {
+	return WriteMetrics{
+		WriteSuccessTotal: s.writeSuccess.Load(),
+		WriteFailTotal:    s.writeFail.Load(),
+		WALPending:        s.walPending.Load(),
+		ChannelUsagePct:   s.channelUsage.Load(),
+		DroppedTotal:      s.droppedCount.Load(),
+	}
+}

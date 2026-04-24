@@ -26,6 +26,9 @@ routes:
       enabled: true
       qps: 500
 
+ratelimit:
+  algorithm: "token_bucket"
+
 redis:
   host: "redis"
   port: 6379

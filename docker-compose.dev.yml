@@ -126,6 +126,7 @@ services:
       - SPRING_APPLICATION_NAME=short-link-admin
       - SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR=nacos:8848
       - SPRING_DATA_REDIS_HOST=redis
+      - JVM_PROFILE=g1
       - TRACE_LOGSTASH_HOST=log-collector
       - TRACE_LOGSTASH_PORT=8081
     depends_on:
@@ -175,6 +176,7 @@ services:
       - SPRING_APPLICATION_NAME=short-link-project
       - SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR=nacos:8848
       - SPRING_DATA_REDIS_HOST=redis
+      - JVM_PROFILE=g1
       - ROCKETMQ_NAME_SERVER=rocketmq-namesrv:9876
       - TRACE_LOGSTASH_HOST=log-collector
       - TRACE_LOGSTASH_PORT=8081

@@ -46,10 +46,13 @@ import com.nym.shortlink.project.dto.resp.ShortLinkBatchCreateRespDTO;
 import com.nym.shortlink.project.dto.resp.ShortLinkCreateRespDTO;
 import com.nym.shortlink.project.dto.resp.ShortLinkGroupCountQueryRespDTO;
 import com.nym.shortlink.project.dto.resp.ShortLinkPageRespDTO;
+import com.nym.shortlink.project.mq.producer.ShortLinkCacheDeleteDelayProducer;
+import com.nym.shortlink.project.mq.producer.ShortLinkCreateInitTxProducer;
 import com.nym.shortlink.project.mq.producer.FaviconUpdateProducer;
 import com.nym.shortlink.project.mq.producer.ShortLinkStatsSaveProducer;
 import com.nym.shortlink.project.service.CacheMonitoringService;
 import com.nym.shortlink.project.service.ShortLinkService;
+import com.nym.shortlink.project.service.lock.ShortLinkLockService;
 import com.nym.shortlink.project.toolkit.HashUtil;
 import com.nym.shortlink.project.toolkit.LinkUtil;
 import com.nym.shortlink.project.toolkit.ShortLinkUrlFormat;
@@ -66,7 +69,6 @@ import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.redisson.api.RBloomFilter;
 import org.redisson.api.RLock;
-import org.redisson.api.RReadWriteLock;
 import org.redisson.api.RedissonClient;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DuplicateKeyException;
@@ -90,8 +92,6 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static com.nym.shortlink.project.common.constant.RedisKeyConstant.GOTO_IS_NULL_SHORT_LINK_KEY;
 import static com.nym.shortlink.project.common.constant.RedisKeyConstant.GOTO_SHORT_LINK_KEY;
-import static com.nym.shortlink.project.common.constant.RedisKeyConstant.LOCK_GID_UPDATE_KEY;
-import static com.nym.shortlink.project.common.constant.RedisKeyConstant.LOCK_GOTO_SHORT_LINK_KEY;
 import static com.nym.shortlink.project.common.constant.RedisKeyConstant.SHORT_LINK_CREATE_LOCK_KEY;
 import static com.nym.shortlink.project.common.constant.RedisKeyConstant.SHORT_LINK_STATS_UIP_KEY;
 import static com.nym.shortlink.project.common.constant.RedisKeyConstant.SHORT_LINK_STATS_UV_KEY;
@@ -109,9 +109,12 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
     private final StringRedisTemplate stringRedisTemplate;
     private final RedissonClient redissonClient;
     private final ShortLinkStatsSaveProducer shortLinkStatsSaveProducer;
+    private final ShortLinkCreateInitTxProducer shortLinkCreateInitTxProducer;
+    private final ShortLinkCacheDeleteDelayProducer shortLinkCacheDeleteDelayProducer;
     private final FaviconUpdateProducer faviconUpdateProducer;
     private final GotoDomainWhiteListConfiguration gotoDomainWhiteListConfiguration;
     private final CacheMonitoringService cacheMonitoringService;
+    private final ShortLinkLockService shortLinkLockService;
 
     @Value("${short-link.domain.default}")
     private String createShortLinkDefaultDomain;
@@ -172,6 +175,8 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
         );
         // 删除短链接后，布隆过滤器如何删除？详情查看：https://nageoffer.com/shortlink/question
         shortUriCreateCachePenetrationBloomFilter.add(fullShortUrl);
+        // 短链接创建后发送事务消息，初始化统计链路
+        shortLinkCreateInitTxProducer.sendCreateInitTransaction(fullShortUrl, requestParam.getGid());
         faviconUpdateProducer.send(fullShortUrl, requestParam.getOriginUrl());
         return ShortLinkCreateRespDTO.builder()
                 .fullShortUrl(ShortLinkUrlFormat.originPrefix(shortLinkPublicScheme) + shortLinkDO.getFullShortUrl())
@@ -306,8 +311,7 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
             }
         } else {
             // 为什么监控表要加上Gid？不加的话是否就不存在读写锁？详情查看：https://nageoffer.com/shortlink/question
-            RReadWriteLock readWriteLock = redissonClient.getReadWriteLock(String.format(LOCK_GID_UPDATE_KEY, requestParam.getFullShortUrl()));
-            RLock rLock = readWriteLock.writeLock();
+            RLock rLock = shortLinkLockService.gidUpdateWriteLock(requestParam.getFullShortUrl());
             rLock.lock();
             try {
                 LambdaUpdateWrapper<ShortLinkDO> linkUpdateWrapper = Wrappers.lambdaUpdate(ShortLinkDO.class)
@@ -361,7 +365,7 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
         if (!Objects.equals(hasShortLinkDO.getValidDateType(), requestParam.getValidDateType())
                 || !Objects.equals(hasShortLinkDO.getValidDate(), requestParam.getValidDate())
                 || !Objects.equals(hasShortLinkDO.getOriginUrl(), requestParam.getOriginUrl())) {
-            stringRedisTemplate.delete(String.format(GOTO_SHORT_LINK_KEY, requestParam.getFullShortUrl()));
+            invalidateCacheWithDelay(requestParam.getFullShortUrl());
             Date currentDate = new Date();
             if (hasShortLinkDO.getValidDate() != null && hasShortLinkDO.getValidDate().before(currentDate)) {
                 if (Objects.equals(requestParam.getValidDateType(), VailDateTypeEnum.PERMANENT.getType()) || requestParam.getValidDate().after(currentDate)) {
@@ -431,8 +435,24 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
             ((HttpServletResponse) response).sendRedirect("/page/notfound");
             return;
         }
-        RLock lock = redissonClient.getLock(String.format(LOCK_GOTO_SHORT_LINK_KEY, fullShortUrl));
-        lock.lock();
+        RLock readLock = shortLinkLockService.gotoReadLock(fullShortUrl);
+        readLock.lock();
+        try {
+            originalLink = stringRedisTemplate.opsForValue().get(String.format(GOTO_SHORT_LINK_KEY, fullShortUrl));
+            if (StrUtil.isNotBlank(originalLink)) {
+                cacheMonitoringService.recordHitAsync();
+                shortLinkStats(buildLinkStatsRecordAndSetUser(fullShortUrl, request, response));
+                ((HttpServletResponse) response).sendRedirect(originalLink);
+                return;
+            }
+        } finally {
+            if (readLock.isHeldByCurrentThread()) {
+                readLock.unlock();
+            }
+        }
+
+        RLock writeLock = shortLinkLockService.gotoWriteLock(fullShortUrl);
+        writeLock.lock();
         try {
             originalLink = stringRedisTemplate.opsForValue().get(String.format(GOTO_SHORT_LINK_KEY, fullShortUrl));
             if (StrUtil.isNotBlank(originalLink)) {
@@ -477,9 +497,18 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
             shortLinkStats(buildLinkStatsRecordAndSetUser(fullShortUrl, request, response));
             ((HttpServletResponse) response).sendRedirect(shortLinkDO.getOriginUrl());
         } finally {
-            if (lock.isHeldByCurrentThread()) {
-                lock.unlock();
+            if (writeLock.isHeldByCurrentThread()) {
+                writeLock.unlock();
             }
+        }
+    }
+
+    private void invalidateCacheWithDelay(String fullShortUrl) {
+        stringRedisTemplate.delete(String.format(GOTO_SHORT_LINK_KEY, fullShortUrl));
+        try {
+            shortLinkCacheDeleteDelayProducer.send(fullShortUrl);
+        } catch (Exception ex) {
+            log.error("[缓存延迟双删] 延迟消息发送失败，fullShortUrl={}", fullShortUrl, ex);
         }
     }
 

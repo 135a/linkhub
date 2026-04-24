@@ -41,10 +41,12 @@ func main() {
 	logHandler := handler.NewLogHandler(logSvc)
 	authHandler := handler.NewAuthHandler(authSvc)
 	healthHandler := handler.NewHealthHandler(chStore)
+	metricsHandler := handler.NewMetricsHandler(chStore)
 
 	r := gin.Default()
 
 	r.GET("/health", healthHandler.Health)
+	r.GET("/metrics", metricsHandler.Metrics)
 
 	v1 := r.Group("/api/v1")
 	{
