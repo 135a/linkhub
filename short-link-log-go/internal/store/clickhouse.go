@@ -102,10 +102,7 @@ func (s *ClickHouseStore) Query(req model.LogQueryRequest) (*model.LogQueryRespo
 		where = append(where, "timestamp <= ?")
 		args = append(args, *req.EndTime)
 	}
-	if req.Service != "" {
-		where = append(where, "service = ?")
-		args = append(args, req.Service)
-	}
+	appendLogServiceBucket(&where, &args, req.Service)
 	if req.Level != "" {
 		where = append(where, "level = ?")
 		args = append(args, req.Level)

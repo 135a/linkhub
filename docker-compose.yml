@@ -4,6 +4,12 @@
 # 使用方式：
 #   Dev:  docker-compose -f docker-compose.yml -f docker-compose.dev.yml up -d
 #   Prod: docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# 短链 / 日志控制台公网（与 frontend build args、Java 环境变量对齐）：
+#   - linkhub-project: SHORT_LINK_DOMAIN_DEFAULT = 存入库的 host[:port]/短码 中的 host 段（无 scheme），开发示例 127.0.0.1:8001，生产示例 link.nym.asia（勿带尾斜杠）
+#   - linkhub-project: SHORT_LINK_PUBLIC_SCHEME = http（开发）或 https（生产），与库中 full_short_url 拼成对外完整 URL
+#   - linkhub-frontend build: VITE_PUBLIC_SHORTLINK_BASE_URL 可选，非空时控制台短链展示强制用该 origin + '/' + 短码（无尾斜杠）；空则用 VITE_SHORT_LINK_PUBLIC_SCHEME + '://' + fullShortUrl
+#   - linkhub-frontend build: VITE_PUBLIC_LOG_CONSOLE_URL = 日志前端入口，开发 http://localhost:3001，生产 https://log.nym.asia
 # =============================================
 
 services:
@@ -17,6 +23,7 @@ services:
     environment:
       MYSQL_ROOT_PASSWORD: root
       MYSQL_DATABASE: link
+      SPRING_APPLICATION_NAME: mysql
     volumes:
       - mysql-data:/var/lib/mysql
       - ./short-link-log-go/init-mysql:/docker-entrypoint-initdb.d
@@ -29,16 +36,22 @@ services:
       retries: 10
       start_period: 30s
     restart: unless-stopped
+    logging:
+      driver: "json-file"
 
   redis:
     image: redis:latest
     container_name: linkhub-redis
     ports:
       - "6379:6379"
+    environment:
+      SPRING_APPLICATION_NAME: redis
     networks:
       - linkhub-network
     command: redis-server --maxmemory 384m --maxmemory-policy allkeys-lru
     restart: unless-stopped
+    logging:
+      driver: "json-file"
 
   nacos:
     image: nacos/nacos-server:v2.2.3
@@ -53,6 +66,7 @@ services:
       - JVM_XMS=768m
       - JVM_XMX=768m
       - JVM_XMN=512m
+      - SPRING_APPLICATION_NAME=nacos
     networks:
       - linkhub-network
     restart: unless-stopped
@@ -64,10 +78,13 @@ services:
       - "9876:9876"
     environment:
       - JAVA_OPT=-Xms64m -Xmx128m -Xmn64m -XX:MetaspaceSize=32m -XX:MaxMetaspaceSize=64m
+      - SPRING_APPLICATION_NAME=rocketmq-namesrv
     command: sh mqnamesrv
     networks:
       - linkhub-network
     restart: unless-stopped
+    logging:
+      driver: "json-file"
 
   rocketmq-broker:
     image: apache/rocketmq:4.9.4
@@ -78,6 +95,7 @@ services:
     environment:
       - NAMESRV_ADDR=rocketmq-namesrv:9876
       - JAVA_OPT=-Duser.home=/opt -Xms512m -Xmx1024m -Xmn512m -XX:MetaspaceSize=128m -XX:MaxMetaspaceSize=256m
+      - SPRING_APPLICATION_NAME=rocketmq-broker
     command: sh mqbroker -c /home/rocketmq/rocketmq-4.9.4/conf/broker.conf
     depends_on:
       rocketmq-namesrv:
@@ -85,6 +103,8 @@ services:
     networks:
       - linkhub-network
     restart: unless-stopped
+    logging:
+      driver: "json-file"
 
   clickhouse:
     image: clickhouse/clickhouse-server:latest
@@ -96,6 +116,7 @@ services:
       - CLICKHOUSE_USER=default
       - CLICKHOUSE_PASSWORD=clickhouse
       - CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT=1
+      - SPRING_APPLICATION_NAME=clickhouse
     volumes:
       - clickhouse-data:/var/lib/clickhouse
       - ./short-link-log-go/init-clickhouse:/docker-entrypoint-initdb.d
@@ -112,6 +133,7 @@ services:
       - "8002:8002"
     environment:
       - SPRING_PROFILES_ACTIVE=dev
+      - SPRING_APPLICATION_NAME=short-link-admin
       - SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR=nacos:8848
       - SPRING_DATA_REDIS_HOST=redis
     depends_on:
@@ -158,6 +180,7 @@ services:
       - "8001:8001"
     environment:
       - SPRING_PROFILES_ACTIVE=dev
+      - SPRING_APPLICATION_NAME=short-link-project
       - SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR=nacos:8848
       - SPRING_DATA_REDIS_HOST=redis
       - ROCKETMQ_NAME_SERVER=rocketmq-namesrv:9876
@@ -202,6 +225,8 @@ services:
     networks:
       - linkhub-network
     restart: unless-stopped
+    logging:
+      driver: "json-file"
 
   log-frontend:
     build:
@@ -215,33 +240,47 @@ services:
     networks:
       - linkhub-network
     restart: unless-stopped
+    logging:
+      driver: "json-file"
 
-  # frontend:
-  #   build:
-  #     context: ./short-link-java
-  #     dockerfile: console-vue/Dockerfile
-  #   container_name: linkhub-frontend
-  #   depends_on:
-  #     gateway:
-  #       condition: service_started
-  #   networks:
-  #     - linkhub-network
-  #   restart: unless-stopped
+  frontend:
+    build:
+      context: ./short-link-java/console-vue
+      dockerfile: Dockerfile
+      args:
+        # Align with Java SHORT_LINK_PUBLIC_SCHEME / optional display override (see openspec change prod-shortlink-and-log-base-urls)
+        VITE_SHORT_LINK_PUBLIC_SCHEME: http
+        VITE_PUBLIC_SHORTLINK_BASE_URL: ""
+        VITE_PUBLIC_LOG_CONSOLE_URL: http://localhost:3001
+    container_name: linkhub-frontend
+    depends_on:
+      gateway:
+        condition: service_started
+    networks:
+      - linkhub-network
+    restart: unless-stopped
 
   nginx-proxy:
     image: nginx:latest
     container_name: linkhub-nginx-proxy
     ports:
-      - "80:80"
+      - "9090:80"
     volumes:
-      - ./nginx:/etc/nginx/conf.d
-      - ./short-link-log-go/frontend/src:/usr/share/nginx/html
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf
+      - ./nginx/linkhub.conf:/etc/nginx/conf.d/linkhub.conf
+      - ./nginx/log.conf:/etc/nginx/conf.d/log.conf
+      - ./short-link-log-go/frontend:/usr/share/nginx/html
     depends_on:
       - gateway
       - log-frontend
+      - frontend
     networks:
       - linkhub-network
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+
+
 
 networks:
   linkhub-network:

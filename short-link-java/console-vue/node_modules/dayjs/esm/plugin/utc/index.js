@@ -119,23 +119,23 @@ export default (function (option, Dayjs, dayjs) {
     }
 
     var offset = Math.abs(input) <= 16 ? input * 60 : input;
-
-    if (offset === 0) {
-      return this.utc(keepLocalTime);
-    }
-
-    var ins = this.clone();
+    var ins = this;
 
     if (keepLocalTime) {
       ins.$offset = offset;
-      ins.$u = false;
+      ins.$u = input === 0;
       return ins;
     }
 
-    var localTimezoneOffset = this.$u ? this.toDate().getTimezoneOffset() : -1 * this.utcOffset();
-    ins = this.local().add(offset + localTimezoneOffset, MIN);
-    ins.$offset = offset;
-    ins.$x.$localOffset = localTimezoneOffset;
+    if (input !== 0) {
+      var localTimezoneOffset = this.$u ? this.toDate().getTimezoneOffset() : -1 * this.utcOffset();
+      ins = this.local().add(offset + localTimezoneOffset, MIN);
+      ins.$offset = offset;
+      ins.$x.$localOffset = localTimezoneOffset;
+    } else {
+      ins = this.utc();
+    }
+
     return ins;
   };
 

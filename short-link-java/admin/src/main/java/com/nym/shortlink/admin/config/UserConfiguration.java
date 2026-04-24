@@ -17,6 +17,7 @@ package com.nym.shortlink.admin.config;
 
 import com.nym.shortlink.admin.common.biz.user.UserFlowRiskControlFilter;
 import com.nym.shortlink.admin.common.biz.user.UserTransmitFilter;
+import com.nym.shortlink.admin.service.UserService;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
@@ -33,9 +34,9 @@ public class UserConfiguration {
      * 用户信息传递过滤器
      */
     @Bean
-    public FilterRegistrationBean<UserTransmitFilter> globalUserTransmitFilter() {
+    public FilterRegistrationBean<UserTransmitFilter> globalUserTransmitFilter(UserService userService) {
         FilterRegistrationBean<UserTransmitFilter> registration = new FilterRegistrationBean<>();
-        registration.setFilter(new UserTransmitFilter());
+        registration.setFilter(new UserTransmitFilter(userService));
         registration.addUrlPatterns("/*");
         registration.setOrder(0);
         return registration;

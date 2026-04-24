@@ -15,7 +15,13 @@ spring:
   cloud:
     nacos:
       discovery:
+        # 4GB 生产档默认关停 Nacos；admin 通过 Feign URL override 静态直连 project。
+        enabled: ${SPRING_CLOUD_NACOS_DISCOVERY_ENABLED:false}
         server-addr: linkhub-nacos:8848
+
+aggregation:
+  # Docker Compose 服务名为 project；本地可设 AGGREGATION_REMOTE_URL=http://127.0.0.1:8001
+  remote-url: ${AGGREGATION_REMOTE_URL:http://project:8001}
 
 short-link:
   group:
@@ -24,3 +30,15 @@ short-link:
     enable: true
     time-window: 1
     max-access-count: 20
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,metrics
+  metrics:
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+      percentiles:
+        http.server.requests: 0.5, 0.95, 0.99

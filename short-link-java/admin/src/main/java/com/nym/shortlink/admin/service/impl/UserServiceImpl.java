@@ -16,7 +16,6 @@
 package com.nym.shortlink.admin.service.impl;
 
 import cn.hutool.core.bean.BeanUtil;
-import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.lang.UUID;
 import com.alibaba.fastjson2.JSON;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -41,16 +40,20 @@ import org.redisson.api.RBloomFilter;
 import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
 import org.springframework.beans.BeanUtils;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
+import org.springframework.data.redis.core.script.RedisScript;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.Map;
+import java.util.Arrays;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
 import static com.nym.shortlink.admin.common.constant.RedisCacheConstant.LOCK_USER_REGISTER_KEY;
+import static com.nym.shortlink.admin.common.constant.RedisCacheConstant.USER_LOGIN_ABS_KEY;
 import static com.nym.shortlink.admin.common.constant.RedisCacheConstant.USER_LOGIN_KEY;
 import static com.nym.shortlink.admin.common.enums.UserErrorCodeEnum.USER_EXIST;
 import static com.nym.shortlink.admin.common.enums.UserErrorCodeEnum.USER_NAME_EXIST;
@@ -63,10 +66,35 @@ import static com.nym.shortlink.admin.common.enums.UserErrorCodeEnum.USER_SAVE_E
 @RequiredArgsConstructor
 public class UserServiceImpl extends ServiceImpl<UserMapper, UserDO> implements UserService {
 
+    /**
+     * Sliding window for an active session. A successful token check extends
+     * the login hash by this duration; idle past it and the session dies.
+     */
+    private static final long SESSION_SLIDING_TTL_SECONDS = TimeUnit.MINUTES.toSeconds(30);
+
+    /**
+     * Hard upper bound for any single login. Once exceeded, the sliding TTL
+     * cannot resurrect the session - the user must log in again.
+     */
+    private static final long SESSION_ABSOLUTE_TTL_SECONDS = TimeUnit.HOURS.toSeconds(24);
+
+    /**
+     * Lua-backed atomic "check token + slide TTL" implemented once and shared
+     * with the Go gateway (same source under gateway /internal/middleware/scripts).
+     */
+    private static final RedisScript<Long> AUTH_CHECK_SCRIPT = buildAuthCheckScript();
+
     private final RBloomFilter<String> userRegisterCachePenetrationBloomFilter;
     private final RedissonClient redissonClient;
     private final StringRedisTemplate stringRedisTemplate;
     private final GroupService groupService;
+
+    private static RedisScript<Long> buildAuthCheckScript() {
+        DefaultRedisScript<Long> script = new DefaultRedisScript<>();
+        script.setLocation(new ClassPathResource("scripts/short-link-auth-check.lua"));
+        script.setResultType(Long.class);
+        return script;
+    }
 
     @Override
     public UserRespDTO getUserByUsername(String username) {
@@ -132,39 +160,41 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, UserDO> implements 
         if (userDO == null) {
             throw new ClientException("用户不存在");
         }
-        Map<Object, Object> hasLoginMap = stringRedisTemplate.opsForHash().entries(USER_LOGIN_KEY + requestParam.getUsername());
-        if (CollUtil.isNotEmpty(hasLoginMap)) {
-            stringRedisTemplate.expire(USER_LOGIN_KEY + requestParam.getUsername(), 30L, TimeUnit.MINUTES);
-            String token = hasLoginMap.keySet().stream()
-                    .findFirst()
-                    .map(Object::toString)
-                    .orElseThrow(() -> new ClientException("用户登录错误"));
-            return new UserLoginRespDTO(token);
-        }
-        /**
-         * Hash
-         * Key：login_用户名
-         * Value：
-         *  Key：token标识
-         *  Val：JSON 字符串（用户信息）
-         */
+        String slidingKey = USER_LOGIN_KEY + requestParam.getUsername();
+        String absoluteKey = USER_LOGIN_ABS_KEY + requestParam.getUsername();
+        // Single-device login: a fresh login invalidates any prior session of the
+        // same user (both sliding and absolute keys) before writing the new token.
+        stringRedisTemplate.delete(Arrays.asList(slidingKey, absoluteKey));
         String uuid = UUID.randomUUID().toString();
-        stringRedisTemplate.opsForHash().put(USER_LOGIN_KEY + requestParam.getUsername(), uuid, JSON.toJSONString(userDO));
-        stringRedisTemplate.expire(USER_LOGIN_KEY + requestParam.getUsername(), 30L, TimeUnit.MINUTES);
+        stringRedisTemplate.opsForHash().put(slidingKey, uuid, JSON.toJSONString(userDO));
+        stringRedisTemplate.expire(slidingKey, SESSION_SLIDING_TTL_SECONDS, TimeUnit.SECONDS);
+        // Absolute sentinel - never touched by sliding renewals so it enforces
+        // the 24h upper bound regardless of ongoing activity.
+        stringRedisTemplate.opsForValue().set(absoluteKey, uuid, SESSION_ABSOLUTE_TTL_SECONDS, TimeUnit.SECONDS);
         return new UserLoginRespDTO(uuid);
     }
 
     @Override
     public Boolean checkLogin(String username, String token) {
-        return stringRedisTemplate.opsForHash().get(USER_LOGIN_KEY + username, token) != null;
+        if (username == null || token == null) {
+            return Boolean.FALSE;
+        }
+        Long result = stringRedisTemplate.execute(
+                AUTH_CHECK_SCRIPT,
+                Arrays.asList(USER_LOGIN_KEY + username, USER_LOGIN_ABS_KEY + username),
+                token,
+                String.valueOf(SESSION_SLIDING_TTL_SECONDS)
+        );
+        return result != null && result == 1L;
     }
 
     @Override
     public void logout(String username, String token) {
-        if (checkLogin(username, token)) {
-            stringRedisTemplate.delete(USER_LOGIN_KEY + username);
-            return;
-        }
-        throw new ClientException("用户Token不存在或用户未登录");
+        // Logout is idempotent: deleting a missing key is a no-op, and double
+        // logouts (or logouts after natural expiry) must not raise a 5xx.
+        stringRedisTemplate.delete(Arrays.asList(
+                USER_LOGIN_KEY + username,
+                USER_LOGIN_ABS_KEY + username
+        ));
     }
 }

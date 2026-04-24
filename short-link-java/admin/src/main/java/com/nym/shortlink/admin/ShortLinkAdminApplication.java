@@ -22,7 +22,10 @@ import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
 import org.springframework.cloud.openfeign.EnableFeignClients;
 
 /**
- * 短链接后管应用
+ * 短链接后管应用。
+ * <p>
+ * {@code @EnableDiscoveryClient} 在开发环境启用；4GB 生产档通过
+ * {@code spring.cloud.nacos.discovery.enabled=false} 使 Nacos 不注册、无刷屏重试。
  */
 @SpringBootApplication
 @EnableDiscoveryClient

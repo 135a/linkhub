@@ -28,7 +28,9 @@ import com.nym.shortlink.project.dto.req.RecycleBinSaveReqDTO;
 import com.nym.shortlink.project.dto.req.ShortLinkRecycleBinPageReqDTO;
 import com.nym.shortlink.project.dto.resp.ShortLinkPageRespDTO;
 import com.nym.shortlink.project.service.RecycleBinService;
+import com.nym.shortlink.project.toolkit.ShortLinkUrlFormat;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
@@ -43,6 +45,9 @@ import static com.nym.shortlink.project.common.constant.RedisKeyConstant.GOTO_SH
 public class RecycleBinServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLinkDO> implements RecycleBinService {
 
     private final StringRedisTemplate stringRedisTemplate;
+
+    @Value("${short-link.domain.public-scheme:http}")
+    private String shortLinkPublicScheme;
 
     @Override
     public void saveRecycleBin(RecycleBinSaveReqDTO requestParam) {
@@ -63,7 +68,7 @@ public class RecycleBinServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLin
         IPage<ShortLinkDO> resultPage = baseMapper.pageRecycleBinLink(requestParam);
         return resultPage.convert(each -> {
             ShortLinkPageRespDTO result = BeanUtil.toBean(each, ShortLinkPageRespDTO.class);
-            result.setDomain("http://" + result.getDomain());
+            result.setDomain(ShortLinkUrlFormat.originPrefix(shortLinkPublicScheme) + result.getDomain());
             return result;
         });
     }

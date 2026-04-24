@@ -133,32 +133,6 @@ services:
           memory: 512m
     restart: unless-stopped
 
-  gateway:
-    build:
-      context: .
-      dockerfile: gateway/Dockerfile
-    container_name: shortlink-gateway
-    ports:
-      - "8000:8000"
-    environment:
-      - SPRING_PROFILES_ACTIVE=dev
-      - SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR=nacos:8848
-      - SPRING_DATA_REDIS_HOST=redis
-    depends_on:
-      redis:
-        condition: service_started
-      nacos:
-        condition: service_started
-    networks:
-      - shortlink-network
-    deploy:
-      resources:
-        limits:
-          memory: 768m
-        reservations:
-          memory: 512m
-    restart: unless-stopped
-
   project:
     build:
       context: .
@@ -197,9 +171,9 @@ services:
       dockerfile: console-vue/Dockerfile
     container_name: shortlink-frontend
     ports:
-      - "80:80"
+      - "9090:80"
     depends_on:
-      gateway:
+      admin:
         condition: service_started
     networks:
       - shortlink-network

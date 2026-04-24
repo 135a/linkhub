@@ -69,6 +69,7 @@ func main() {
 	r.Use(middleware.CORS())
 	r.Use(middleware.TraceIDInjector())
 	r.Use(middleware.AccessLogger(mc, logClient))
+	r.Use(middleware.AuthToken(redisClient))
 
 	rateLimitMw := middleware.NewRateLimitMiddleware(rl, mc, cfg.Routes)
 	r.Use(rateLimitMw.Handler())

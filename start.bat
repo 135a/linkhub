@@ -57,13 +57,13 @@ echo.
 echo ╔═══════════════════════════════════════════════════╗
 echo ║                    服务访问地址                    ║
 echo ╠═══════════════════════════════════════════════════╣
-echo ║ 短链接控制台     - http://localhost                ║
+echo ║ 短链接控制台     - http://localhost:9090           ║
 echo ║ 网关监控 API      - http://localhost:8000/api/v1/metrics ║
 echo ║ 日志查询系统     - http://localhost:3001           ║
 echo ║ Nacos 控制台    - http://localhost:8848/nacos      ║
 echo ╚═══════════════════════════════════════════════════╝
 echo.
-echo 📝 提示：访问 http://localhost 即可开始使用！
+echo 📝 提示：访问 http://localhost:9090 即可开始使用！
 echo.
 
 :end

@@ -23,7 +23,8 @@ import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
 import java.util.concurrent.locks.ReentrantLock;
 
 /**
- * 短链接应用
+ * 短链接应用。{@code @EnableDiscoveryClient} 在开发环境启用；4GB 生产档通过
+ * {@code spring.cloud.nacos.discovery.enabled=false} 关闭 Nacos 注册。
  */
 @SpringBootApplication
 @EnableDiscoveryClient

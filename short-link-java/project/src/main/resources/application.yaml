@@ -19,11 +19,15 @@ spring:
   cloud:
     nacos:
       discovery:
+        # 4GB 生产档默认关停 Nacos，消除启动期重试刷屏与常驻内存成本。
+        enabled: ${SPRING_CLOUD_NACOS_DISCOVERY_ENABLED:false}
         server-addr: linkhub-nacos:8848
 
 short-link:
   domain:
-    default: 127.0.0.1:8001
+    default: ${SHORT_LINK_DOMAIN_DEFAULT:localhost:9090}
+    # User-visible URL scheme for API/UI (http dev, https prod). Full URL = scheme + "://" + fullShortUrl (host/path from DB).
+    public-scheme: ${SHORT_LINK_PUBLIC_SCHEME:http}
   stats:
     locale:
       amap-key: 824c511f0997586ea016f979fdb23087
@@ -46,8 +50,22 @@ rocketmq:
   producer:
     group: short-link_project-service_stats-save_pg
     topic: short-link_project-service_topic
+    favicon-topic: short-link_project-service_favicon-update_topic
     send-message-timeout: 2000
     retry-times-when-send-failed: 1
     retry-times-when-send-async-failed: 1
   consumer:
     group: short-link_project-service_stats-save_cg
+    favicon-group: short-link_project-service_favicon-update_cg
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,metrics
+  metrics:
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+      percentiles:
+        http.server.requests: 0.5, 0.95, 0.99

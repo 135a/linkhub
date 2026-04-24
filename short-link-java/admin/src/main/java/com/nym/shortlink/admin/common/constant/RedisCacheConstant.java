@@ -31,7 +31,12 @@ public class RedisCacheConstant {
     public static final String LOCK_GROUP_CREATE_KEY = "short-link:lock_group-create:%s";
 
     /**
-     * 用户登录缓存标识
+     * 用户登录缓存标识（Hash：field=token，value=用户 JSON；滑动 TTL = 30 分钟）
      */
     public static final String USER_LOGIN_KEY = "short-link:login:";
+
+    /**
+     * 用户登录绝对生命周期哨兵（String：value=对应 token；TTL = 24 小时，不随活跃滑动）
+     */
+    public static final String USER_LOGIN_ABS_KEY = "short-link:login:abs:";
 }

@@ -2,7 +2,10 @@ server:
   port: 8080
 
 nacos:
-  enabled: true
+  # 4GB production profile keeps nacos disabled; the gateway statically routes
+  # to `default_target`. Flip to true + bring up a nacos container if dynamic
+  # discovery is required (non-4GB profile).
+  enabled: false
   host: "nacos"
   port: 8848
   namespace: ""
@@ -10,13 +13,13 @@ nacos:
   refresh_interval: 30
 
 routes:
-  - path_prefix: "/api/v1/shortlink"
+  - path_prefix: "/api/short-link/v1"
     service_name: "short-link-project"
     default_target: "http://project:8001"
     rate_limit:
       enabled: true
       qps: 1000
-  - path_prefix: "/api/v1/user"
+  - path_prefix: "/api/short-link/admin/v1"
     service_name: "short-link-admin"
     default_target: "http://admin:8002"
     rate_limit:
@@ -46,6 +49,10 @@ cors:
     - "Content-Type"
     - "Authorization"
     - "X-Trace-ID"
+    - "userId"
+    - "username"
+    - "realName"
+    - "token"
   expose_headers:
     - "X-Trace-ID"
   allow_credentials: true

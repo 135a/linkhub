@@ -6,6 +6,7 @@
       <list>
         <option value="$PROJECT_DIR$/shortlink-main/pom.xml" />
         <option value="$PROJECT_DIR$/shortlink-main/register/pom.xml" />
+        <option value="$PROJECT_DIR$/short-link-java/pom.xml" />
       </list>
     </option>
     <option name="ignoredFiles">

@@ -1,12 +1,16 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
 	"shortlink-log-go/internal/model"
 	"shortlink-log-go/internal/service"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 )
+
+var errInvalidLogServiceFilter = errors.New("无效的服务参数，允许省略或填写: project, admin, gateway, infra")
 
 type LogHandler struct {
 	svc *service.LogService
@@ -46,6 +50,12 @@ func (h *LogHandler) Query(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid query params"})
 		return
 	}
+	normalized, err := normalizeLogServiceFilter(req.Service)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	req.Service = normalized
 	resp, err := h.svc.Query(req)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "query failed"})
@@ -66,3 +76,16 @@ func (h *LogHandler) ListServices(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"services": services})
 }
 
+// normalizeLogServiceFilter returns lower-case bucket or "" (no filter). Unknown non-empty values error.
+func normalizeLogServiceFilter(raw string) (string, error) {
+	s := strings.TrimSpace(strings.ToLower(raw))
+	if s == "" {
+		return "", nil
+	}
+	switch s {
+	case "project", "admin", "gateway", "infra":
+		return s, nil
+	default:
+		return "", errInvalidLogServiceFilter
+	}
+}

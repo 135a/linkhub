@@ -46,11 +46,13 @@ import com.nym.shortlink.project.dto.resp.ShortLinkBatchCreateRespDTO;
 import com.nym.shortlink.project.dto.resp.ShortLinkCreateRespDTO;
 import com.nym.shortlink.project.dto.resp.ShortLinkGroupCountQueryRespDTO;
 import com.nym.shortlink.project.dto.resp.ShortLinkPageRespDTO;
+import com.nym.shortlink.project.mq.producer.FaviconUpdateProducer;
 import com.nym.shortlink.project.mq.producer.ShortLinkStatsSaveProducer;
 import com.nym.shortlink.project.service.CacheMonitoringService;
 import com.nym.shortlink.project.service.ShortLinkService;
 import com.nym.shortlink.project.toolkit.HashUtil;
 import com.nym.shortlink.project.toolkit.LinkUtil;
+import com.nym.shortlink.project.toolkit.ShortLinkUrlFormat;
 import jakarta.servlet.ServletRequest;
 import jakarta.servlet.ServletResponse;
 import jakarta.servlet.http.Cookie;
@@ -107,11 +109,15 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
     private final StringRedisTemplate stringRedisTemplate;
     private final RedissonClient redissonClient;
     private final ShortLinkStatsSaveProducer shortLinkStatsSaveProducer;
+    private final FaviconUpdateProducer faviconUpdateProducer;
     private final GotoDomainWhiteListConfiguration gotoDomainWhiteListConfiguration;
     private final CacheMonitoringService cacheMonitoringService;
 
     @Value("${short-link.domain.default}")
     private String createShortLinkDefaultDomain;
+
+    @Value("${short-link.domain.public-scheme:http}")
+    private String shortLinkPublicScheme;
 
     @Transactional(rollbackFor = Exception.class)
     @Override
@@ -138,7 +144,9 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
                 .totalUip(0)
                 .delTime(0L)
                 .fullShortUrl(fullShortUrl)
-                .favicon(getFavicon(requestParam.getOriginUrl()))
+                // Favicon is fetched asynchronously to keep createShortLink within
+                // its latency budget; see FaviconUpdateProducer / Consumer.
+                .favicon("")
                 .build();
         ShortLinkGotoDO linkGotoDO = ShortLinkGotoDO.builder()
                 .fullShortUrl(fullShortUrl)
@@ -164,8 +172,9 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
         );
         // 删除短链接后，布隆过滤器如何删除？详情查看：https://nageoffer.com/shortlink/question
         shortUriCreateCachePenetrationBloomFilter.add(fullShortUrl);
+        faviconUpdateProducer.send(fullShortUrl, requestParam.getOriginUrl());
         return ShortLinkCreateRespDTO.builder()
-                .fullShortUrl("http://" + shortLinkDO.getFullShortUrl())
+                .fullShortUrl(ShortLinkUrlFormat.originPrefix(shortLinkPublicScheme) + shortLinkDO.getFullShortUrl())
                 .originUrl(requestParam.getOriginUrl())
                 .gid(requestParam.getGid())
                 .build();
@@ -199,7 +208,8 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
                     .totalUip(0)
                     .delTime(0L)
                     .fullShortUrl(fullShortUrl)
-                    .favicon(getFavicon(requestParam.getOriginUrl()))
+                    // Async favicon resolution (see createShortLink above).
+                    .favicon("")
                     .build();
             ShortLinkGotoDO linkGotoDO = ShortLinkGotoDO.builder()
                     .fullShortUrl(fullShortUrl)
@@ -216,13 +226,14 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
                     requestParam.getOriginUrl(),
                     LinkUtil.getLinkCacheValidTime(requestParam.getValidDate()), TimeUnit.MILLISECONDS
             );
+            faviconUpdateProducer.send(fullShortUrl, requestParam.getOriginUrl());
         } finally {
             if (lock.isHeldByCurrentThread()) {
                 lock.unlock();
             }
         }
         return ShortLinkCreateRespDTO.builder()
-                .fullShortUrl("http://" + fullShortUrl)
+                .fullShortUrl(ShortLinkUrlFormat.originPrefix(shortLinkPublicScheme) + fullShortUrl)
                 .originUrl(requestParam.getOriginUrl())
                 .gid(requestParam.getGid())
                 .build();
@@ -275,10 +286,13 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
                     .eq(ShortLinkDO::getDelFlag, 0)
                     .eq(ShortLinkDO::getEnableStatus, 0)
                     .set(Objects.equals(requestParam.getValidDateType(), VailDateTypeEnum.PERMANENT.getType()), ShortLinkDO::getValidDate, null);
+            boolean originChanged = !Objects.equals(requestParam.getOriginUrl(), hasShortLinkDO.getOriginUrl());
             ShortLinkDO shortLinkDO = ShortLinkDO.builder()
                     .domain(hasShortLinkDO.getDomain())
                     .shortUri(hasShortLinkDO.getShortUri())
-                    .favicon(Objects.equals(requestParam.getOriginUrl(), hasShortLinkDO.getOriginUrl()) ? hasShortLinkDO.getFavicon() : getFavicon(requestParam.getOriginUrl()))
+                    // Keep old favicon when originUrl is unchanged; reset and
+                    // re-resolve asynchronously otherwise.
+                    .favicon(originChanged ? "" : hasShortLinkDO.getFavicon())
                     .createdType(hasShortLinkDO.getCreatedType())
                     .gid(requestParam.getGid())
                     .originUrl(requestParam.getOriginUrl())
@@ -287,6 +301,9 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
                     .validDate(requestParam.getValidDate())
                     .build();
             baseMapper.update(shortLinkDO, updateWrapper);
+            if (originChanged) {
+                faviconUpdateProducer.send(requestParam.getFullShortUrl(), requestParam.getOriginUrl());
+            }
         } else {
             // 为什么监控表要加上Gid？不加的话是否就不存在读写锁？详情查看：https://nageoffer.com/shortlink/question
             RReadWriteLock readWriteLock = redissonClient.getReadWriteLock(String.format(LOCK_GID_UPDATE_KEY, requestParam.getFullShortUrl()));
@@ -304,6 +321,7 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
                         .build();
                 delShortLinkDO.setDelFlag(1);
                 baseMapper.update(delShortLinkDO, linkUpdateWrapper);
+                boolean gidMoveOriginChanged = !Objects.equals(requestParam.getOriginUrl(), hasShortLinkDO.getOriginUrl());
                 ShortLinkDO shortLinkDO = ShortLinkDO.builder()
                         .domain(createShortLinkDefaultDomain)
                         .originUrl(requestParam.getOriginUrl())
@@ -318,10 +336,14 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
                         .totalUv(hasShortLinkDO.getTotalUv())
                         .totalUip(hasShortLinkDO.getTotalUip())
                         .fullShortUrl(hasShortLinkDO.getFullShortUrl())
-                        .favicon(Objects.equals(requestParam.getOriginUrl(), hasShortLinkDO.getOriginUrl()) ? hasShortLinkDO.getFavicon() : getFavicon(requestParam.getOriginUrl()))
+                        // Same async favicon policy as above.
+                        .favicon(gidMoveOriginChanged ? "" : hasShortLinkDO.getFavicon())
                         .delTime(0L)
                         .build();
                 baseMapper.insert(shortLinkDO);
+                if (gidMoveOriginChanged) {
+                    faviconUpdateProducer.send(hasShortLinkDO.getFullShortUrl(), requestParam.getOriginUrl());
+                }
                 LambdaQueryWrapper<ShortLinkGotoDO> linkGotoQueryWrapper = Wrappers.lambdaQuery(ShortLinkGotoDO.class)
                         .eq(ShortLinkGotoDO::getFullShortUrl, requestParam.getFullShortUrl())
                         .eq(ShortLinkGotoDO::getGid, hasShortLinkDO.getGid());
@@ -358,7 +380,7 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
         IPage<ShortLinkDO> resultPage = baseMapper.pageLink(requestParam);
         return resultPage.convert(each -> {
             ShortLinkPageRespDTO result = BeanUtil.toBean(each, ShortLinkPageRespDTO.class);
-            result.setDomain("http://" + result.getDomain());
+            result.setDomain(ShortLinkUrlFormat.originPrefix(shortLinkPublicScheme) + result.getDomain());
             return result;
         });
     }

@@ -13,16 +13,14 @@
         <el-form-item label="服务">
           <el-select
             v-model="filters.service"
-            placeholder="全部服务"
-            clearable
-            filterable
-            style="width: 180px"
+            placeholder="全部"
+            style="width: 220px"
           >
             <el-option
-              v-for="svc in serviceOptions"
-              :key="svc"
-              :label="svc"
-              :value="svc"
+              v-for="opt in serviceFilterOptions"
+              :key="opt.value === '' ? '__all__' : opt.value"
+              :label="opt.label"
+              :value="opt.value"
             />
           </el-select>
         </el-form-item>
@@ -71,7 +69,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { queryLogs, listServices } from '../api/index.js'
+import { queryLogs } from '../api/index.js'
 
 const router = useRouter()
 const loading = ref(false)
@@ -81,7 +79,15 @@ const page = ref(1)
 const pageSize = ref(50)
 const filters = reactive({ keyword: '', service: '', level: '' })
 const timeRange = ref([])
-const serviceOptions = ref([])
+
+/** 与后端查询桶一致：空=不按服务过滤 */
+const serviceFilterOptions = [
+  { label: '全部', value: '' },
+  { label: 'project', value: 'project' },
+  { label: 'admin', value: 'admin' },
+  { label: 'gateway', value: 'gateway' },
+  { label: '其它（MySQL+Redis+MQ+ClickHouse）', value: 'infra' }
+]
 
 const formatTime = (t) => {
   if (!t) return ''
@@ -98,15 +104,6 @@ const handleLogout = () => {
   router.push('/login')
 }
 
-const fetchServiceOptions = async () => {
-  try {
-    const { data } = await listServices()
-    serviceOptions.value = data.services || []
-  } catch {
-    // silently ignore — not critical
-  }
-}
-
 const fetchLogs = async () => {
   loading.value = true
   try {
@@ -119,14 +116,14 @@ const fetchLogs = async () => {
     logs.value = data.logs || []
     total.value = data.total || 0
   } catch (e) {
-    ElMessage.error('查询失败')
+    const msg = e?.response?.data?.error || '查询失败'
+    ElMessage.error(msg)
   } finally {
     loading.value = false
   }
 }
 
 onMounted(() => {
-  fetchServiceOptions()
   fetchLogs()
 })
 </script>
@@ -138,4 +135,3 @@ onMounted(() => {
 .filter-card { margin: 12px; }
 .pagination { display: flex; justify-content: center; padding: 16px 0; }
 </style>
-

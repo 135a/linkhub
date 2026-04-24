@@ -16,10 +16,10 @@
 package com.nym.shortlink.admin.common.web;
 
 import cn.hutool.core.collection.CollectionUtil;
-import cn.hutool.core.util.ReflectUtil;
 import cn.hutool.core.util.StrUtil;
 import com.nym.shortlink.admin.common.convention.errorcode.BaseErrorCode;
 import com.nym.shortlink.admin.common.convention.exception.AbstractException;
+import com.nym.shortlink.admin.common.convention.exception.ClientException;
 import com.nym.shortlink.admin.common.convention.result.Result;
 import com.nym.shortlink.admin.common.convention.result.Results;
 import jakarta.servlet.http.HttpServletRequest;
@@ -33,7 +33,6 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
-import java.util.Objects;
 import java.util.Optional;
 
 /**
@@ -62,13 +61,15 @@ public class GlobalExceptionHandler {
     /**
      * 拦截应用内抛出的异常
      */
-    @ExceptionHandler(value = {AbstractException.class})
+    @ExceptionHandler(value = AbstractException.class)
     public Result abstractException(HttpServletRequest request, AbstractException ex) {
-        if (ex.getCause() != null) {
-            log.error("[{}] {} [ex] {}", request.getMethod(), request.getRequestURL().toString(), ex.toString(), ex.getCause());
-            return Results.failure(ex);
+        boolean flowLimitOrClientError = ex instanceof ClientException;
+        String requestUrl = request.getRequestURL().toString();
+        if (flowLimitOrClientError) {
+            log.warn("[{}] {} [code={}] [message={}]", request.getMethod(), requestUrl, ex.errorCode, ex.errorMessage);
+        } else {
+            log.error("[{}] {} [code={}] [message={}]", request.getMethod(), requestUrl, ex.errorCode, ex.errorMessage, ex);
         }
-        log.error("[{}] {} [ex] {}", request.getMethod(), request.getRequestURL().toString(), ex.toString());
         return Results.failure(ex);
     }
 
@@ -77,12 +78,12 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(value = Throwable.class)
     public Result defaultErrorHandler(HttpServletRequest request, Throwable throwable) {
-        log.error("[{}] {} ", request.getMethod(), getUrl(request), throwable);
-        // 注意，此处是为了聚合模式添加的代码，正常不需要该判断
-        if (Objects.equals(throwable.getClass().getSuperclass().getSimpleName(), AbstractException.class.getSimpleName())) {
-            String errorCode = ReflectUtil.getFieldValue(throwable, "errorCode").toString();
-            String errorMessage = ReflectUtil.getFieldValue(throwable, "errorMessage").toString();
-            return Results.failure(errorCode, errorMessage);
+        log.error("[{}] {} [ex] {}", request.getMethod(), getUrl(request), throwable.getMessage(), throwable);
+        if (throwable instanceof AbstractException) {
+            AbstractException abstractException = (AbstractException) throwable;
+            log.error("异常边界识别到 AbstractException，errorCode={}, errorMessage={}",
+                    abstractException.errorCode, abstractException.errorMessage);
+            return Results.failure(abstractException);
         }
         return Results.failure();
     }

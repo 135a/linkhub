@@ -55,9 +55,9 @@ public final class Results {
      * 通过 {@link AbstractException} 构建失败响应
      */
     public static Result<Void> failure(AbstractException abstractException) {
-        String errorCode = Optional.ofNullable(abstractException.getErrorCode())
+        String errorCode = Optional.ofNullable(abstractException.errorCode)
                 .orElse(BaseErrorCode.SERVICE_ERROR.code());
-        String errorMessage = Optional.ofNullable(abstractException.getErrorMessage())
+        String errorMessage = Optional.ofNullable(abstractException.errorMessage)
                 .orElse(BaseErrorCode.SERVICE_ERROR.message());
         return new Result<Void>()
                 .setCode(errorCode)

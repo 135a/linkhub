@@ -23,6 +23,7 @@ import com.nym.shortlink.admin.dto.req.ShortLinkGroupUpdateReqDTO;
 import com.nym.shortlink.admin.dto.resp.ShortLinkGroupRespDTO;
 import com.nym.shortlink.admin.service.GroupService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -38,6 +39,7 @@ import java.util.List;
  */
 @RestController
 @RequiredArgsConstructor
+@Slf4j
 public class GroupController {
 
     private final GroupService groupService;
@@ -56,7 +58,15 @@ public class GroupController {
      */
     @GetMapping("/api/short-link/admin/v1/group")
     public Result<List<ShortLinkGroupRespDTO>> listGroup() {
-        return Results.success(groupService.listGroup());
+        try {
+            log.info("GroupController.listGroup start");
+            List<ShortLinkGroupRespDTO> result = groupService.listGroup();
+            log.info("GroupController.listGroup end, result size: {}", result.size());
+            return Results.success(result);
+        } catch (Exception e) {
+            log.error("GroupController.listGroup exception: {}", e);
+            throw e;
+        }
     }
 
     /**

@@ -30,6 +30,8 @@ services:
       retries: 10
       start_period: 30s
     restart: unless-stopped
+    logging:
+      driver: json-file
 
   redis:
     image: redis:latest
@@ -40,6 +42,8 @@ services:
       - linkhub-network
     command: redis-server --maxmemory 1g --maxmemory-policy allkeys-lru
     restart: unless-stopped
+    logging:
+      driver: json-file
 
   nacos:
     image: nacos/nacos-server:v2.2.3
@@ -69,6 +73,8 @@ services:
     networks:
       - linkhub-network
     restart: unless-stopped
+    logging:
+      driver: json-file
 
   rocketmq-broker:
     image: apache/rocketmq:4.9.4
@@ -83,9 +89,13 @@ services:
     depends_on:
       rocketmq-namesrv:
         condition: service_started
+      fluent-bit:
+        condition: service_started
     networks:
       - linkhub-network
     restart: unless-stopped
+    logging:
+      driver: json-file
 
   clickhouse:
     image: clickhouse/clickhouse-server:latest
@@ -113,7 +123,7 @@ services:
       - "8002:8002"
     environment:
       - SPRING_PROFILES_ACTIVE=dev
-      - SPRING_APPLICATION_NAME=shortlink-admin
+      - SPRING_APPLICATION_NAME=short-link-admin
       - SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR=nacos:8848
       - SPRING_DATA_REDIS_HOST=redis
       - TRACE_LOGSTASH_HOST=log-collector
@@ -162,12 +172,15 @@ services:
       - "8001:8001"
     environment:
       - SPRING_PROFILES_ACTIVE=dev
-      - SPRING_APPLICATION_NAME=shortlink-project
+      - SPRING_APPLICATION_NAME=short-link-project
       - SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR=nacos:8848
       - SPRING_DATA_REDIS_HOST=redis
       - ROCKETMQ_NAME_SERVER=rocketmq-namesrv:9876
       - TRACE_LOGSTASH_HOST=log-collector
       - TRACE_LOGSTASH_PORT=8081
+      # Stored short-link host/path (no scheme); must match how users open short links (e.g. gateway 8001 on host).
+      - SHORT_LINK_DOMAIN_DEFAULT=127.0.0.1:8001
+      - SHORT_LINK_PUBLIC_SCHEME=http
     depends_on:
       mysql:
         condition: service_healthy
@@ -221,19 +234,39 @@ services:
       - linkhub-network
     restart: unless-stopped
 
-  # frontend:
-  #   build:
-  #     context: ./short-link-log-go
-  #     dockerfile: frontend/Dockerfile
-  #   container_name: linkhub-frontend
-  #   ports:
-  #     - "80:80"
-  #   depends_on:
-  #     gateway:
-  #       condition: service_started
-  #   networks:
-  #     - linkhub-network
-  #   restart: unless-stopped
+  nginx-proxy:
+    image: nginx:latest
+    container_name: linkhub-nginx-proxy
+    ports:
+      - "9090:80"
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf
+      - ./nginx/linkhub.conf:/etc/nginx/conf.d/linkhub.conf
+      - ./nginx/log.conf:/etc/nginx/conf.d/log.conf
+      - ./short-link-log-go/frontend:/usr/share/nginx/html
+    depends_on:
+      - gateway
+      - log-frontend
+      - fluent-bit
+    networks:
+      - linkhub-network
+    restart: unless-stopped
+    logging:
+      driver: json-file
+
+  fluent-bit:
+    image: fluent/fluent-bit:latest
+    container_name: linkhub-fluent-bit
+    volumes:
+      - ./nginx/fluent-bit.conf/fluent-bit.conf:/fluent-bit/etc/fluent-bit.conf
+      - /var/run/docker.sock:/var/run/docker.sock
+    ports:
+      - "24224:24224"
+    depends_on:
+      - log-collector
+    networks:
+      - linkhub-network
+    restart: unless-stopped
 
 networks:
   linkhub-network:

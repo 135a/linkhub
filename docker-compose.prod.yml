@@ -2,9 +2,9 @@
 # LinkHub - Docker Compose Prod 模式配置
 #
 # 特性：
-# - 针对 4GB 服务器精心优化
-# - 最小化内存占用，确保稳定运行
-# - 开启资源限制
+# - 针对 4GB 服务器精心优化（合计 RSS ≤ ~3.6 GB，留 ≥ 400 MB 给内核/SSH）
+# - 固定路由：Nacos 已下线，服务发现改为 docker 内网 DNS
+# - 资源预算与 JVM 参数严格绑定（见 openspec resource-budget-4gb-production 规范）
 # =============================================
 
 services:
@@ -21,14 +21,16 @@ services:
     volumes:
       - mysql-data:/var/lib/mysql
       - ./short-link-log-go/init-mysql:/docker-entrypoint-initdb.d
+    # innodb-buffer-pool-size 与容器 limit 的 ~36% 对齐，防止 OOMKilled
+    command: ["--innodb-buffer-pool-size=256M", "--max-connections=100", "--performance-schema=OFF"]
     networks:
       - linkhub-network
     deploy:
       resources:
         limits:
-          memory: 800m
+          memory: 700m
         reservations:
-          memory: 512m
+          memory: 500m
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot"]
       interval: 10s
@@ -44,36 +46,14 @@ services:
       - "6379:6379"
     networks:
       - linkhub-network
-    command: redis-server --maxmemory 384m --maxmemory-policy allkeys-lru
+    # maxmemory 严格低于容器 limit，为 RDB/AOF fork 留头部空间
+    command: ["redis-server", "--maxmemory", "192mb", "--maxmemory-policy", "allkeys-lru", "--save", "", "--appendonly", "no"]
     deploy:
       resources:
         limits:
-          memory: 400m
-        reservations:
           memory: 256m
-    restart: unless-stopped
-
-  nacos:
-    image: nacos/nacos-server:v2.2.3
-    container_name: linkhub-nacos
-    ports:
-      - "8848:8848"
-      - "9848:9848"
-      - "9849:9849"
-    environment:
-      - MODE=standalone
-      - NACOS_AUTH_ENABLE=false
-      - JVM_XMS=384m
-      - JVM_XMX=384m
-      - JVM_XMN=256m
-    networks:
-      - linkhub-network
-    deploy:
-      resources:
-        limits:
-          memory: 600m
         reservations:
-          memory: 400m
+          memory: 128m
     restart: unless-stopped
 
   rocketmq-namesrv:
@@ -82,16 +62,16 @@ services:
     ports:
       - "9876:9876"
     environment:
-      - JAVA_OPT=-Xms64m -Xmx128m -Xmn64m -XX:MetaspaceSize=32m -XX:MaxMetaspaceSize=64m
+      - JAVA_OPT=-Xms64m -Xmx96m -Xmn48m -XX:MetaspaceSize=32m -XX:MaxMetaspaceSize=64m
     command: sh mqnamesrv
     networks:
       - linkhub-network
     deploy:
       resources:
         limits:
-          memory: 180m
+          memory: 128m
         reservations:
-          memory: 100m
+          memory: 96m
     restart: unless-stopped
 
   rocketmq-broker:
@@ -102,7 +82,7 @@ services:
       - "10911:10911"
     environment:
       - NAMESRV_ADDR=rocketmq-namesrv:9876
-      - JAVA_OPT=-Duser.home=/opt -Xms256m -Xmx512m -Xmn256m -XX:MetaspaceSize=64m -XX:MaxMetaspaceSize=128m
+      - JAVA_OPT=-Duser.home=/opt -Xms256m -Xmx384m -Xmn192m -XX:MetaspaceSize=64m -XX:MaxMetaspaceSize=128m
     command: sh mqbroker -c /home/rocketmq/rocketmq-4.9.4/conf/broker.conf
     depends_on:
       rocketmq-namesrv:
@@ -112,9 +92,9 @@ services:
     deploy:
       resources:
         limits:
-          memory: 650m
+          memory: 512m
         reservations:
-          memory: 400m
+          memory: 384m
     restart: unless-stopped
 
   clickhouse:
@@ -131,9 +111,9 @@ services:
     deploy:
       resources:
         limits:
-          memory: 600m
+          memory: 500m
         reservations:
-          memory: 400m
+          memory: 384m
     restart: unless-stopped
 
   admin:
@@ -145,24 +125,24 @@ services:
       - "8002:8002"
     environment:
       - SPRING_PROFILES_ACTIVE=dev
-      - SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR=nacos:8848
       - SPRING_DATA_REDIS_HOST=redis
-      - JAVA_OPTS=-Xms256m -Xmx384m
+      # Nacos 服务发现已关停；admin 通过 Feign URL override 直连 project。
+      - SPRING_CLOUD_NACOS_DISCOVERY_ENABLED=false
+      - AGGREGATION_REMOTE_URL=http://project:8001
+      - JAVA_OPTS=-Xms192m -Xmx288m -XX:MaxMetaspaceSize=128m
     depends_on:
       mysql:
         condition: service_healthy
       redis:
-        condition: service_started
-      nacos:
         condition: service_started
     networks:
       - linkhub-network
     deploy:
       resources:
         limits:
-          memory: 500m
+          memory: 384m
         reservations:
-          memory: 300m
+          memory: 256m
     restart: unless-stopped
 
   gateway:
@@ -190,9 +170,9 @@ services:
     deploy:
       resources:
         limits:
-          memory: 250m
+          memory: 192m
         reservations:
-          memory: 128m
+          memory: 96m
     restart: unless-stopped
 
   project:
@@ -204,18 +184,19 @@ services:
       - "8001:8001"
     environment:
       - SPRING_PROFILES_ACTIVE=dev
-      - SPRING_CLOUD_NACOS_DISCOVERY_SERVER_ADDR=nacos:8848
       - SPRING_DATA_REDIS_HOST=redis
+      - SPRING_CLOUD_NACOS_DISCOVERY_ENABLED=false
       - ROCKETMQ_NAME_SERVER=rocketmq-namesrv:9876
       - TRACE_LOGSTASH_HOST=log-collector
       - TRACE_LOGSTASH_PORT=8081
-      - JAVA_OPTS=-Xms384m -Xmx512m
+      - JAVA_OPTS=-Xms256m -Xmx384m -XX:MaxMetaspaceSize=128m
+      # Production public short-link host (no scheme); adjust to your DNS (e.g. link.nym.asia).
+      - SHORT_LINK_DOMAIN_DEFAULT=link.nym.asia
+      - SHORT_LINK_PUBLIC_SCHEME=https
     depends_on:
       mysql:
         condition: service_healthy
       redis:
-        condition: service_started
-      nacos:
         condition: service_started
       rocketmq-namesrv:
         condition: service_started
@@ -226,9 +207,9 @@ services:
     deploy:
       resources:
         limits:
-          memory: 600m
+          memory: 512m
         reservations:
-          memory: 450m
+          memory: 384m
     restart: unless-stopped
 
   log-collector:
@@ -257,9 +238,9 @@ services:
     deploy:
       resources:
         limits:
-          memory: 250m
+          memory: 192m
         reservations:
-          memory: 128m
+          memory: 96m
     restart: unless-stopped
 
   log-frontend:
@@ -276,15 +257,19 @@ services:
     deploy:
       resources:
         limits:
-          memory: 128m
-        reservations:
           memory: 64m
+        reservations:
+          memory: 32m
     restart: unless-stopped
 
   frontend:
     build:
-      context: ./short-link-java
-      dockerfile: console-vue/Dockerfile
+      context: ./short-link-java/console-vue
+      dockerfile: Dockerfile
+      args:
+        VITE_SHORT_LINK_PUBLIC_SCHEME: https
+        VITE_PUBLIC_SHORTLINK_BASE_URL: https://link.nym.asia
+        VITE_PUBLIC_LOG_CONSOLE_URL: https://log.nym.asia
     container_name: linkhub-frontend
     depends_on:
       gateway:
@@ -294,18 +279,20 @@ services:
     deploy:
       resources:
         limits:
-          memory: 128m
-        reservations:
           memory: 64m
+        reservations:
+          memory: 32m
     restart: unless-stopped
 
   nginx-proxy:
     image: nginx:latest
     container_name: linkhub-nginx-proxy
     ports:
-      - "80:80"
+      - "9090:80"
     volumes:
-      - ./nginx:/etc/nginx/conf.d
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf
+      - ./nginx/linkhub.conf:/etc/nginx/conf.d/linkhub.conf
+      - ./nginx/log.conf:/etc/nginx/conf.d/log.conf
     depends_on:
       - gateway
       - log-frontend
@@ -315,9 +302,9 @@ services:
     deploy:
       resources:
         limits:
-          memory: 128m
-        reservations:
           memory: 64m
+        reservations:
+          memory: 32m
     restart: unless-stopped
 
 networks:
