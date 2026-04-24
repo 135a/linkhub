@@ -35,7 +35,7 @@
         <spotless-maven-plugin.version>2.22.1</spotless-maven-plugin.version>
         <hutool.version>5.8.31</hutool.version>
         <nacos.version>2.4.1.0</nacos.version>
-        <rocketmq-spring-boot-starter.version>2.3.0</rocketmq-spring-boot-starter.version>
+        <rocketmq-spring-boot-starter.version>2.3.2</rocketmq-spring-boot-starter.version>
 
     </properties>
 
