@@ -30,11 +30,14 @@ func NewWAL(path string, maxSize int64) *WAL {
 }
 
 // AppendBatch serialises each entry as a JSON line and appends it to the WAL file.
-// Returns ErrWALLimitReached if the file is at or beyond its size limit.
+// If appending would exceed the configured size limit ErrWALLimitReached is returned
+// before any bytes are written.
+// It returns the number of entries successfully written.
 func (w *WAL) AppendBatch(batch []model.LogEntry) (int, error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
+	// Check current file size before writing.
 	if info, err := os.Stat(w.path); err == nil {
 		if info.Size() >= w.maxSize {
 			return 0, ErrWALLimitReached
@@ -55,6 +58,7 @@ func (w *WAL) AppendBatch(batch []model.LogEntry) (int, error) {
 		}
 		line = append(line, '\n')
 
+		// Re-check size limit during writing to avoid exceeding it mid-batch.
 		if info, err := f.Stat(); err == nil && info.Size()+int64(len(line)) > w.maxSize {
 			return written, ErrWALLimitReached
 		}
@@ -68,7 +72,7 @@ func (w *WAL) AppendBatch(batch []model.LogEntry) (int, error) {
 }
 
 // ReadAll reads all log entries from the WAL file.
-// Returns an empty slice (no error) if the file does not exist.
+// If the file does not exist an empty slice is returned without error.
 func (w *WAL) ReadAll() ([]model.LogEntry, error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -91,7 +95,8 @@ func (w *WAL) ReadAll() ([]model.LogEntry, error) {
 		}
 		var e model.LogEntry
 		if err := json.Unmarshal(line, &e); err != nil {
-			continue // skip malformed lines
+			// Skip malformed lines rather than aborting the recovery.
+			continue
 		}
 		entries = append(entries, e)
 	}
@@ -101,7 +106,8 @@ func (w *WAL) ReadAll() ([]model.LogEntry, error) {
 	return entries, nil
 }
 
-// Delete removes the WAL file from disk. No-op if the file does not exist.
+// Delete removes the WAL file from disk.
+// If the file does not exist the call is a no-op.
 func (w *WAL) Delete() error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
