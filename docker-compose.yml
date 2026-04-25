@@ -190,6 +190,9 @@ services:
       - ROCKETMQ_NAME_SERVER=rocketmq-namesrv:9876
       - TRACE_LOGSTASH_HOST=log-collector
       - TRACE_LOGSTASH_PORT=8081
+      # Stored short-link host/path (no scheme); must match how users open short links (e.g. gateway 8001 on host).
+      - SHORT_LINK_DOMAIN_DEFAULT=127.0.0.1:8001
+      - SHORT_LINK_PUBLIC_SCHEME=http
     depends_on:
       mysql:
         condition: service_healthy
