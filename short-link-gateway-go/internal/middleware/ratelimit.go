@@ -1,20 +1,21 @@
 package middleware
 
 import (
-	"log"
 	"net/http"
 	"shortlink-gateway-go/internal/config"
+	logclient "shortlink-gateway-go/internal/log"
 	"shortlink-gateway-go/internal/metrics"
 	"shortlink-gateway-go/internal/ratelimit"
 	"sort"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 )
 
 type RateLimitMiddleware struct {
-	limiter   ratelimit.Limiter
-	metrics   *metrics.MetricsCollector
-	prefixes  []rlPrefix // sorted by length desc for longest-prefix match
+	limiter  ratelimit.Limiter
+	metrics  *metrics.MetricsCollector
+	prefixes []rlPrefix // sorted by length desc for longest-prefix match
 }
 
 type rlPrefix struct {
@@ -62,15 +63,22 @@ func (r *RateLimitMiddleware) Handler() gin.HandlerFunc {
 
 		allowed, err := r.limiter.Allow(path, matched.RateLimit.QPS)
 		if err != nil {
-			log.Printf("rate limit check error: %v", err)
+			if logclient.Logger != nil {
+				logclient.Logger.Error("rate limit check error", zap.Error(err))
+			}
 			c.Next()
 			return
 		}
 
 		if !allowed {
 			traceID, _ := c.Get("trace_id")
-			log.Printf("rate_limit_exceeded path=%s trace_id=%v qps=%d",
-				path, traceID, matched.RateLimit.QPS)
+			if logclient.Logger != nil {
+				logclient.Logger.Warn("rate_limit_exceeded",
+					zap.String("path", path),
+					zap.Any("trace_id", traceID),
+					zap.Int("qps", matched.RateLimit.QPS),
+				)
+			}
 
 			r.metrics.RecordRequest(c.Request.Method, path, http.StatusTooManyRequests, 0)
 

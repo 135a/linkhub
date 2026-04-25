@@ -1,9 +1,10 @@
-﻿package middleware
+package middleware
 
 import (
 	"context"
 	"log"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -26,6 +27,13 @@ var publicPrefixes = []string{
 func AuthToken(redisClient *redis.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		path := c.Request.URL.Path
+		method := c.Request.Method
+
+		// Allow POST to /api/short-link/admin/v1/user for user registration
+		if method == http.MethodPost && path == "/api/short-link/admin/v1/user" {
+			c.Next()
+			return
+		}
 
 		for _, prefix := range publicPrefixes {
 			if strings.HasPrefix(path, prefix) {
@@ -48,28 +56,53 @@ func AuthToken(redisClient *redis.Client) gin.HandlerFunc {
 			}
 		}
 
-		if token == "" {
+		username := c.GetHeader("username")
+
+		if token == "" || username == "" {
 			traceID, _ := c.Get("trace_id")
-			log.Printf("[WARN] AuthToken: missing token path=%s trace_id=%v", path, traceID)
+			log.Printf("[WARN] AuthToken: missing token or username path=%s trace_id=%v", path, traceID)
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
 				"code":    "UNAUTHORIZED",
-				"message": "Missing authentication token",
+				"message": "Missing authentication token or username",
 			})
 			return
 		}
 
-		redisKey := "login:" + token
+		slidingKey := "short-link:login:" + username
+		absoluteKey := "short-link:login:abs:" + username
 		ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 		defer cancel()
 
-		exists, err := redisClient.Exists(ctx, redisKey).Result()
+		// The Java backend stores tokens in a Hash where the field is the token UUID.
+		// It also uses an absolute TTL key to enforce a hard session timeout.
+
+		// First check if the absolute sentinel exists
+		absExists, err := redisClient.Exists(ctx, absoluteKey).Result()
 		if err != nil {
-			log.Printf("[WARN] AuthToken: redis check failed path=%s err=%v, fail open", path, err)
+			log.Printf("[WARN] AuthToken: redis absolute check failed path=%s err=%v, fail open", path, err)
 			c.Next()
 			return
 		}
 
-		if exists == 0 {
+		if absExists == 0 {
+			traceID, _ := c.Get("trace_id")
+			log.Printf("[WARN] AuthToken: absolute session expired path=%s trace_id=%v", path, traceID)
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+				"code":    "UNAUTHORIZED",
+				"message": "Session expired (absolute)",
+			})
+			return
+		}
+
+		// Then check if the token exists in the sliding Hash
+		tokenExists, err := redisClient.HExists(ctx, slidingKey, token).Result()
+		if err != nil {
+			log.Printf("[WARN] AuthToken: redis sliding check failed path=%s err=%v, fail open", path, err)
+			c.Next()
+			return
+		}
+
+		if !tokenExists {
 			traceID, _ := c.Get("trace_id")
 			log.Printf("[WARN] AuthToken: invalid/expired token path=%s trace_id=%v", path, traceID)
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
@@ -77,6 +110,15 @@ func AuthToken(redisClient *redis.Client) gin.HandlerFunc {
 				"message": "Invalid or expired token",
 			})
 			return
+		}
+
+		// URL-encode user identity headers to ensure non-ASCII characters (like Chinese)
+		// survive transmission to backend services.
+		headersToEncode := []string{"username", "user-name", "real-name"}
+		for _, h := range headersToEncode {
+			if val := c.GetHeader(h); val != "" {
+				c.Request.Header.Set(h, url.QueryEscape(val))
+			}
 		}
 
 		c.Next()

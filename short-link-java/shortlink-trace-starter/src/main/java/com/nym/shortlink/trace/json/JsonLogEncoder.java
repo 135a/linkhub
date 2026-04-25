@@ -34,7 +34,12 @@ public class JsonLogEncoder extends EncoderBase<ILoggingEvent> {
         logEntry.put("service", getServiceName());
         logEntry.put("thread", event.getThreadName());
         logEntry.put("logger", event.getLoggerName());
-        logEntry.put("message", event.getFormattedMessage());
+        String message = event.getFormattedMessage();
+        ch.qos.logback.classic.spi.IThrowableProxy tp = event.getThrowableProxy();
+        if (tp != null) {
+            message += "\n" + ch.qos.logback.classic.spi.ThrowableProxyUtil.asString(tp);
+        }
+        logEntry.put("message", message);
 
         Map<String, String> mdc = event.getMDCPropertyMap();
         if (mdc != null && mdc.containsKey("trace_id")) {

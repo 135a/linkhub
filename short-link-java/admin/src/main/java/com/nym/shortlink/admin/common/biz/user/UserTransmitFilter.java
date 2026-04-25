@@ -57,10 +57,10 @@ public class UserTransmitFilter implements Filter {
             token = httpServletRequest.getHeader("Authorization");
         }
         // 解码用户名和真实姓名
-        if (StringUtils.hasText(userName)) {
+        if (StringUtils.hasText(userName) && userName.contains("%")) {
             userName = URLDecoder.decode(userName, UTF_8);
         }
-        if (StringUtils.hasText(realName)) {
+        if (StringUtils.hasText(realName) && realName.contains("%")) {
             realName = URLDecoder.decode(realName, UTF_8);
         }
         // Defense-in-depth model:

@@ -3,10 +3,11 @@ package log
 import (
 	"bytes"
 	"encoding/json"
-	"log"
 	"net/http"
 	"shortlink-gateway-go/internal/config"
 	"time"
+
+	"go.uber.org/zap"
 )
 
 type LogEntry struct {
@@ -41,18 +42,24 @@ func (c *LogClient) Send(entry LogEntry) {
 	entries := []LogEntry{entry}
 	data, err := json.Marshal(entries)
 	if err != nil {
-		log.Printf("failed to marshal log entry: %v", err)
+		if Logger != nil {
+			Logger.Error("failed to marshal log entry", zap.Error(err))
+		}
 		return
 	}
 
 	resp, err := http.Post(c.endpoint, "application/json", bytes.NewBuffer(data))
 	if err != nil {
-		log.Printf("failed to send log to collector: %v", err)
+		if Logger != nil {
+			Logger.Error("failed to send log to collector", zap.Error(err))
+		}
 		return
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusAccepted {
-		log.Printf("log collector returned non-202 status: %d", resp.StatusCode)
+		if Logger != nil {
+			Logger.Warn("log collector returned non-202 status", zap.Int("status", resp.StatusCode))
+		}
 	}
 }

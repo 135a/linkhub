@@ -26,7 +26,7 @@ services:
       SPRING_APPLICATION_NAME: mysql
     volumes:
       - mysql-data:/var/lib/mysql
-      - ./short-link-log-go/init-mysql:/docker-entrypoint-initdb.d
+      - ./short-link-log-go/init-mysql/01_create_log_users.sql:/docker-entrypoint-initdb.d/4-create_log_users.sql
     networks:
       - linkhub-network
     healthcheck:
@@ -94,9 +94,11 @@ services:
       - "10911:10911"
     environment:
       - NAMESRV_ADDR=rocketmq-namesrv:9876
-      - JAVA_OPT=-Duser.home=/opt -Xms512m -Xmx1024m -Xmn512m -XX:MetaspaceSize=128m -XX:MaxMetaspaceSize=256m
+      # - JAVA_OPT=-Duser.home=/opt -Xms512m -Xmx1024m -Xmn512m -XX:MetaspaceSize=128m -XX:MaxMetaspaceSize=256m
       - SPRING_APPLICATION_NAME=rocketmq-broker
     command: sh mqbroker -c /home/rocketmq/rocketmq-4.9.4/conf/broker.conf
+    volumes:
+      - ./rocketmq/broker.conf:/home/rocketmq/rocketmq-4.9.4/conf/broker.conf
     depends_on:
       rocketmq-namesrv:
         condition: service_started

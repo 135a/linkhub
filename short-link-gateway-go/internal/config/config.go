@@ -16,6 +16,7 @@ type Config struct {
 	Redis        RedisConfig        `yaml:"redis"`
 	CORS         CORSConfig         `yaml:"cors"`
 	LogCollector LogCollectorConfig `yaml:"log_collector"`
+	Log          LogConfig          `yaml:"log"`
 }
 
 type ServerConfig struct {
@@ -67,6 +68,11 @@ type CORSConfig struct {
 type LogCollectorConfig struct {
 	Endpoint string `yaml:"endpoint"`
 	Level    string `yaml:"level"`
+}
+
+type LogConfig struct {
+	Level string `yaml:"level"`
+	Path  string `yaml:"path"`
 }
 
 var (

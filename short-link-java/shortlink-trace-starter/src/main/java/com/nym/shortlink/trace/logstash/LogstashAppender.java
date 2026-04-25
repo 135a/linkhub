@@ -69,6 +69,10 @@ public class LogstashAppender {
                     if (!enabled || event.getLoggerName().equals(LogstashAppender.class.getName())) return;
                     String level = event.getLevel().toString();
                     String message = event.getFormattedMessage();
+                    ch.qos.logback.classic.spi.IThrowableProxy tp = event.getThrowableProxy();
+                    if (tp != null) {
+                        message += "\n" + ch.qos.logback.classic.spi.ThrowableProxyUtil.asString(tp);
+                    }
                     Map<String, String> mdc = event.getMDCPropertyMap();
                     LogstashAppender.this.append(level, message, mdc);
                 }

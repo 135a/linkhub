@@ -3,12 +3,12 @@ package middleware
 import (
 	"encoding/binary"
 	"encoding/hex"
-	"log"
 	"math/rand"
 	logclient "shortlink-gateway-go/internal/log"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 )
 
 // fastUUID generates a UUID-like string using timestamp + random bytes.
@@ -63,20 +63,40 @@ func AccessLogger(mc interface{}, logClient interface{}) gin.HandlerFunc {
 		}
 
 		// log access details
-		log.Printf("[ACCESS] %s %s %d %dms %s",
-			c.Request.Method,
-			c.Request.URL.Path,
-			c.Writer.Status(),
-			latency,
-			traceID,
-		)
+		if logclient.Logger != nil {
+			// Mask sensitive headers
+			headers := make(map[string][]string)
+			for k, v := range c.Request.Header {
+				if k == "Authorization" || k == "Token" || k == "Password" || k == "Secret" {
+					headers[k] = []string{"******"}
+				} else {
+					headers[k] = v
+				}
+			}
 
-		// send to log collector
+			logclient.Logger.Debug("Access log detail",
+				zap.String("method", c.Request.Method),
+				zap.String("path", c.Request.URL.Path),
+				zap.Any("headers", headers),
+				zap.String("trace_id", traceID.(string)),
+				zap.String("client_ip", c.ClientIP()),
+			)
+
+			logclient.Logger.Info("Access log",
+				zap.String("method", c.Request.Method),
+				zap.String("path", c.Request.URL.Path),
+				zap.Int("status", c.Writer.Status()),
+				zap.Int64("latency", latency),
+				zap.String("trace_id", traceID.(string)),
+			)
+		}
+
+		// send to log collector asynchronously to avoid blocking response
 		if logClient != nil {
 			if client, ok := logClient.(interface {
 				Send(logclient.LogEntry)
 			}); ok {
-				client.Send(logclient.LogEntry{
+				go client.Send(logclient.LogEntry{
 					Level:     "info",
 					Timestamp: time.Now(),
 					Message:   "Access log",

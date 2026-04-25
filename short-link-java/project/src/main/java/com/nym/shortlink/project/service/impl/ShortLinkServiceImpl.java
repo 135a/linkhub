@@ -125,13 +125,17 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
     @Transactional(rollbackFor = Exception.class)
     @Override
     public ShortLinkCreateRespDTO createShortLink(ShortLinkCreateReqDTO requestParam) {
-        // 短链接接口的并发量有多少？如何测试？详情查看：https://nageoffer.com/shortlink/question
-        //verificationWhitelist(requestParam.getOriginUrl());
-        String shortLinkSuffix = generateSuffix(requestParam);
-        String fullShortUrl = StrBuilder.create(createShortLinkDefaultDomain)
-                .append("/")
-                .append(shortLinkSuffix)
-                .toString();
+        log.info("开始创建短链接, 参数: {}", JSON.toJSONString(requestParam));
+        try {
+            // 短链接接口的并发量有多少？如何测试？详情查看：https://nageoffer.com/shortlink/question
+            //verificationWhitelist(requestParam.getOriginUrl());
+            String shortLinkSuffix = generateSuffix(requestParam);
+            log.info("生成短链接后缀: {}", shortLinkSuffix);
+            String fullShortUrl = StrBuilder.create(createShortLinkDefaultDomain)
+                    .append("/")
+                    .append(shortLinkSuffix)
+                    .toString();
+            log.info("完整短链接: {}", fullShortUrl);
         ShortLinkDO shortLinkDO = ShortLinkDO.builder()
                 .domain(createShortLinkDefaultDomain)
                 .originUrl(requestParam.getOriginUrl())
@@ -158,8 +162,10 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
         try {
             // 短链接项目有多少数据？如何解决海量数据存储？详情查看：https://nageoffer.com/shortlink/question
             baseMapper.insert(shortLinkDO);
+            log.info("插入 t_link 成功");
             // 短链接数据库分片键是如何考虑的？详情查看：https://nageoffer.com/shortlink/question
             shortLinkGotoMapper.insert(linkGotoDO);
+            log.info("插入 t_link_goto 成功");
         } catch (DuplicateKeyException ex) {
             // 首先判断是否存在布隆过滤器，如果不存在直接新增
             if (!shortUriCreateCachePenetrationBloomFilter.contains(fullShortUrl)) {
@@ -176,13 +182,23 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
         // 删除短链接后，布隆过滤器如何删除？详情查看：https://nageoffer.com/shortlink/question
         shortUriCreateCachePenetrationBloomFilter.add(fullShortUrl);
         // 短链接创建后发送事务消息，初始化统计链路
+        log.info("准备发送事务消息...");
         shortLinkCreateInitTxProducer.sendCreateInitTransaction(fullShortUrl, requestParam.getGid());
+        log.info("事务消息发送成功");
+        
+        log.info("准备发送获取Favicon消息...");
         faviconUpdateProducer.send(fullShortUrl, requestParam.getOriginUrl());
+        log.info("获取Favicon消息发送成功");
+        
         return ShortLinkCreateRespDTO.builder()
                 .fullShortUrl(ShortLinkUrlFormat.originPrefix(shortLinkPublicScheme) + shortLinkDO.getFullShortUrl())
                 .originUrl(requestParam.getOriginUrl())
                 .gid(requestParam.getGid())
                 .build();
+        } catch (Throwable t) {
+            log.error("创建短链接异常", t);
+            throw t;
+        }
     }
 
     @Override

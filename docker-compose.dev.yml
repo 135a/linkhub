@@ -20,7 +20,7 @@ services:
       MYSQL_DATABASE: link
     volumes:
       - mysql-data:/var/lib/mysql
-      - ./short-link-log-go/init-mysql:/docker-entrypoint-initdb.d
+      - ./short-link-log-go/init-mysql/01_create_log_users.sql:/docker-entrypoint-initdb.d/4-create_log_users.sql
     networks:
       - linkhub-network
     healthcheck:

@@ -167,8 +167,8 @@ services:
     restart: unless-stopped
   frontend:
     build:
-      context: .
-      dockerfile: console-vue/Dockerfile
+      context: ./console-vue
+      dockerfile: Dockerfile
     container_name: shortlink-frontend
     ports:
       - "9090:80"

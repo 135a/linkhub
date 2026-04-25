@@ -19,6 +19,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v8"
+	"go.uber.org/zap"
 )
 
 func main() {
@@ -31,6 +32,9 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to load config: %v", err)
 	}
+
+	logclient.InitLogger(cfg)
+	defer logclient.Logger.Sync()
 
 	// Initialize Nacos client
 	var nacosClient *nacos.NacosClient
@@ -51,7 +55,7 @@ func main() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		if err := redisClient.Ping(ctx).Err(); err != nil {
-			log.Printf("redis connection failed: %v, using memory-only rate limit", err)
+			logclient.Logger.Warn("redis connection failed, using memory-only rate limit", zap.Error(err))
 			redisClient = nil
 		}
 	}
@@ -59,7 +63,7 @@ func main() {
 	mc := metrics.NewMetricsCollector()
 	logClient := logclient.NewLogClient(cfg)
 	rl := ratelimit.NewLimiter(cfg.RateLimit.Algorithm, redisClient)
-	log.Printf("rate limiter algorithm=%s", rl.Algorithm())
+	logclient.Logger.Info("rate limiter initialized", zap.String("algorithm", rl.Algorithm()))
 	healthHandler := handler.NewHealthHandler()
 	metricsHandler := handler.NewMetricsHandler(mc)
 
@@ -87,15 +91,15 @@ func main() {
 
 	go func() {
 		if err := http.ListenAndServe(":"+cfg.Server.Port, r); err != nil {
-			log.Fatalf("server failed: %v", err)
+			logclient.Logger.Fatal("server failed", zap.Error(err))
 		}
 	}()
 
-	log.Printf("gateway started on :%s", cfg.Server.Port)
+	logclient.Logger.Info("gateway started", zap.String("port", cfg.Server.Port))
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
-	log.Println("shutting down server...")
+	logclient.Logger.Info("shutting down server...")
 }

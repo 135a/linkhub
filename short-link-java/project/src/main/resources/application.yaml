@@ -1,6 +1,10 @@
 server:
   port: 8001
 
+logging:
+  level:
+    com.nym.shortlink: ${LOGGING_LEVEL_COM_NYM_SHORTLINK:debug}
+
 spring:
   application:
     name: short-link-project

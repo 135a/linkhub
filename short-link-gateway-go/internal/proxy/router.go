@@ -1,15 +1,17 @@
 package proxy
 
 import (
-	"log"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 	"shortlink-gateway-go/internal/config"
+	logclient "shortlink-gateway-go/internal/log"
 	"shortlink-gateway-go/internal/nacos"
 	"sort"
 	"strings"
 	"sync"
+
+	"go.uber.org/zap"
 )
 
 type RouteEntry struct {
@@ -23,13 +25,17 @@ type RouteEntry struct {
 func (re *RouteEntry) UpdateProxy(target string) {
 	targetURL, err := url.Parse(target)
 	if err != nil {
-		log.Printf("[proxy] failed to parse target %s: %v", target, err)
+		if logclient.Logger != nil {
+			logclient.Logger.Error("failed to parse target", zap.String("target", target), zap.Error(err))
+		}
 		return
 	}
 
 	proxy := httputil.NewSingleHostReverseProxy(targetURL)
 	proxy.ErrorHandler = func(w http.ResponseWriter, req *http.Request, err error) {
-		log.Printf("[proxy] error forwarding to %s: %v", target, err)
+		if logclient.Logger != nil {
+			logclient.Logger.Error("error forwarding", zap.String("target", target), zap.Error(err))
+		}
 		http.Error(w, "Bad Gateway", http.StatusBadGateway)
 	}
 
@@ -59,13 +65,17 @@ func NewRouter(routes []config.RouteConfig, nacosClient *nacos.NacosClient) *Rou
 
 		targetURL, err := url.Parse(target)
 		if err != nil {
-			log.Printf("[proxy] failed to parse default target %s: %v", target, err)
+			if logclient.Logger != nil {
+				logclient.Logger.Error("failed to parse default target", zap.String("target", target), zap.Error(err))
+			}
 			continue
 		}
 
 		proxy := httputil.NewSingleHostReverseProxy(targetURL)
 		proxy.ErrorHandler = func(w http.ResponseWriter, req *http.Request, err error) {
-			log.Printf("[proxy] error forwarding: %v", err)
+			if logclient.Logger != nil {
+				logclient.Logger.Error("error forwarding", zap.Error(err))
+			}
 			http.Error(w, "Bad Gateway", http.StatusBadGateway)
 		}
 
@@ -109,10 +119,14 @@ func (r *Router) refreshProxies() {
 				nacosURL = "http://" + nacosURL
 			}
 
-			log.Printf("[proxy] updating route %s to Nacos address: %s", route.Prefix, nacosURL)
+			if logclient.Logger != nil {
+				logclient.Logger.Debug("updating route to Nacos address", zap.String("prefix", route.Prefix), zap.String("nacosURL", nacosURL))
+			}
 			route.UpdateProxy(nacosURL)
 		} else {
-			log.Printf("[proxy] Nacos has no instances for %s, using default: %s", route.ServiceName, route.DefaultTarget)
+			if logclient.Logger != nil {
+				logclient.Logger.Debug("Nacos has no instances, using default target", zap.String("service", route.ServiceName), zap.String("defaultTarget", route.DefaultTarget))
+			}
 			route.UpdateProxy(route.DefaultTarget)
 		}
 	}
@@ -125,8 +139,14 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 	proxy := r.matchRoute(req.URL.Path)
 	if proxy == nil {
+		if logclient.Logger != nil {
+			logclient.Logger.Debug("route not found", zap.String("path", req.URL.Path))
+		}
 		http.NotFound(w, req)
 		return
+	}
+	if logclient.Logger != nil {
+		logclient.Logger.Debug("route matched", zap.String("path", req.URL.Path))
 	}
 	proxy.ServeHTTP(w, req)
 }

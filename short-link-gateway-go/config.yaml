@@ -64,3 +64,7 @@ cors:
 log_collector:
   endpoint: http://linkhub-log-collector:8081/api/v1/logs/ingest
   level: "info"
+
+log:
+  level: "debug"
+  path: "./gateway.log"

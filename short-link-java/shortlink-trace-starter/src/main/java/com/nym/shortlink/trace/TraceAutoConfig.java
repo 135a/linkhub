@@ -16,4 +16,10 @@ public class TraceAutoConfig {
     public RestTemplate traceRestTemplate() {
         return new RestTemplate();
     }
+
+    @Bean
+    @org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(name = "short-link.trace.log.enabled", havingValue = "true", matchIfMissing = true)
+    public com.nym.shortlink.trace.aspect.LogAspect logAspect() {
+        return new com.nym.shortlink.trace.aspect.LogAspect();
+    }
 }
