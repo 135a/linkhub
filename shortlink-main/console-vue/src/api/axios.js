@@ -27,6 +27,10 @@ http.interceptors.request.use(
 http.interceptors.response.use(
     (res) => {
         if (res.status == 0 || res.status == 200) {
+            if (res.data && res.data.success === false) {
+                ElMessage.error(res.data.message)
+                return Promise.reject(res.data)
+            }
             // 请求成功对响应数据做处理，此处返回的数据是axios.then(res)中接收的数据
             // code值为 0 或 200 时视为成功
             return Promise.resolve(res)

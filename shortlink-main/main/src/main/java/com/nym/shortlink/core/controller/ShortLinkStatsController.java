@@ -15,11 +15,14 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import lombok.extern.slf4j.Slf4j;
+
 /**
  * 短链接监控控制层
  */
 @RestController(value = "shortLinkStatsControllerByAdmin")
 @RequiredArgsConstructor
+@Slf4j
 public class ShortLinkStatsController {
 
     private final ShortLinkStatsService shortLinkStatsService;
@@ -29,7 +32,10 @@ public class ShortLinkStatsController {
      */
     @GetMapping("/api/short-link/admin/v1/stats")
     public Result<ShortLinkStatsRespDTO> shortLinkStats(ShortLinkStatsReqDTO requestParam) {
-        return Results.success(shortLinkStatsService.oneShortLinkStats(requestParam));
+        log.info("进入接口: shortLinkStats");
+        Result<ShortLinkStatsRespDTO> result = Results.success(shortLinkStatsService.oneShortLinkStats(requestParam));
+        log.info("接口处理完毕: shortLinkStats");
+        return result;
     }
 
     /**
@@ -37,7 +43,10 @@ public class ShortLinkStatsController {
      */
     @GetMapping("/api/short-link/admin/v1/stats/group")
     public Result<ShortLinkStatsRespDTO> groupShortLinkStats(ShortLinkGroupStatsReqDTO requestParam) {
-        return Results.success(shortLinkStatsService.groupShortLinkStats(requestParam));
+        log.info("进入接口: groupShortLinkStats");
+        Result<ShortLinkStatsRespDTO> result = Results.success(shortLinkStatsService.groupShortLinkStats(requestParam));
+        log.info("接口处理完毕: groupShortLinkStats");
+        return result;
     }
 
     /**
@@ -45,7 +54,10 @@ public class ShortLinkStatsController {
      */
     @GetMapping("/api/short-link/admin/v1/stats/access-record")
     public Result<IPage<ShortLinkStatsAccessRecordRespDTO>> shortLinkStatsAccessRecord(ShortLinkStatsAccessRecordReqDTO requestParam) {
-        return Results.success(shortLinkStatsService.shortLinkStatsAccessRecord(requestParam));
+        log.info("进入接口: shortLinkStatsAccessRecord");
+        Result<IPage<ShortLinkStatsAccessRecordRespDTO>> result = Results.success(shortLinkStatsService.shortLinkStatsAccessRecord(requestParam));
+        log.info("接口处理完毕: shortLinkStatsAccessRecord");
+        return result;
     }
 
     /**
@@ -53,6 +65,9 @@ public class ShortLinkStatsController {
      */
     @GetMapping("/api/short-link/admin/v1/stats/access-record/group")
     public Result<IPage<ShortLinkStatsAccessRecordRespDTO>> groupShortLinkStatsAccessRecord(ShortLinkGroupStatsAccessRecordReqDTO requestParam) {
-        return Results.success(shortLinkStatsService.groupShortLinkStatsAccessRecord(requestParam));
+        log.info("进入接口: groupShortLinkStatsAccessRecord");
+        Result<IPage<ShortLinkStatsAccessRecordRespDTO>> result = Results.success(shortLinkStatsService.groupShortLinkStatsAccessRecord(requestParam));
+        log.info("接口处理完毕: groupShortLinkStatsAccessRecord");
+        return result;
     }
 }

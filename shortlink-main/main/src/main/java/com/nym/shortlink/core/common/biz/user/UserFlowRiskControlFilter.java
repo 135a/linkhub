@@ -43,7 +43,11 @@ public class UserFlowRiskControlFilter implements Filter {
         DefaultRedisScript<Long> redisScript = new DefaultRedisScript<>();
         redisScript.setScriptSource(new ResourceScriptSource(new ClassPathResource(USER_FLOW_RISK_CONTROL_LUA_SCRIPT_PATH)));
         redisScript.setResultType(Long.class);
-        String username = Optional.ofNullable(UserContext.getUsername()).orElse("other");
+        String username = Optional.ofNullable(UserContext.getUsername())
+                .orElse(((jakarta.servlet.http.HttpServletRequest) request).getHeader("username"));
+        if (!org.springframework.util.StringUtils.hasText(username)) {
+            username = "other";
+        }
         Long result;
         try {
             result = stringRedisTemplate.execute(redisScript, Lists.newArrayList(username), userFlowRiskControlConfiguration.getTimeWindow());
@@ -53,6 +57,7 @@ public class UserFlowRiskControlFilter implements Filter {
             return;
         }
         if (result == null || result > userFlowRiskControlConfiguration.getMaxAccessCount()) {
+            log.info("用户请求流量限制，用户名：{},请求次数： {} ", username,result);
             returnJson((HttpServletResponse) response, JSON.toJSONString(Results.failure(new ClientException(FLOW_LIMIT_ERROR))));
             return;
         }

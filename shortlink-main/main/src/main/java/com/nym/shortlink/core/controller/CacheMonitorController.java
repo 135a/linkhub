@@ -10,12 +10,15 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
+import lombok.extern.slf4j.Slf4j;
+
 /**
  * 缓存监控控制层
  */
 @RestController
 @RequestMapping("/api/short-link/v1/monitor")
 @RequiredArgsConstructor
+@Slf4j
 public class CacheMonitorController {
 
     private final CacheMonitoringService cacheMonitoringService;
@@ -25,7 +28,10 @@ public class CacheMonitorController {
      */
     @GetMapping("/cache-hit-rate/today")
     public Result<CacheMonitoringService.CacheHitRateDTO> getTodayHitRate() {
-        return Results.success(cacheMonitoringService.getTodayHitRate());
+        log.info("进入接口: getTodayHitRate");
+        Result<CacheMonitoringService.CacheHitRateDTO> result = Results.success(cacheMonitoringService.getTodayHitRate());
+        log.info("接口处理完毕: getTodayHitRate");
+        return result;
     }
 
     /**
@@ -33,6 +39,9 @@ public class CacheMonitorController {
      */
     @GetMapping("/cache-hit-rate/last-7-days")
     public Result<List<CacheMonitoringService.CacheHitRateDTO>> getLast7DaysHitRate() {
-        return Results.success(cacheMonitoringService.getLast7DaysHitRate());
+        log.info("进入接口: getLast7DaysHitRate");
+        Result<List<CacheMonitoringService.CacheHitRateDTO>> result = Results.success(cacheMonitoringService.getLast7DaysHitRate());
+        log.info("接口处理完毕: getLast7DaysHitRate");
+        return result;
     }
 }

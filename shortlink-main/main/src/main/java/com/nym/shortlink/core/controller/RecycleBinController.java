@@ -15,11 +15,14 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
+import lombok.extern.slf4j.Slf4j;
+
 /**
  * 回收站管理控制层
  */
 @RestController
 @RequiredArgsConstructor
+@Slf4j
 public class RecycleBinController {
 
     private final RecycleBinService recycleBinService;
@@ -29,7 +32,9 @@ public class RecycleBinController {
      */
     @PostMapping("/api/short-link/admin/v1/recycle-bin/save")
     public Result<Void> saveRecycleBin(@RequestBody RecycleBinSaveReqDTO requestParam) {
+        log.info("进入接口: saveRecycleBin");
         recycleBinService.saveRecycleBin(requestParam);
+        log.info("接口处理完毕: saveRecycleBin");
         return Results.success();
     }
 
@@ -38,7 +43,10 @@ public class RecycleBinController {
      */
     @GetMapping("/api/short-link/admin/v1/recycle-bin/page")
     public Result<IPage<ShortLinkPageRespDTO>> pageShortLink(ShortLinkRecycleBinPageReqDTO requestParam) {
-        return Results.success(recycleBinService.pageShortLink(requestParam));
+        log.info("进入接口: pageShortLink (recycle bin)");
+        Result<IPage<ShortLinkPageRespDTO>> result = Results.success(recycleBinService.pageShortLink(requestParam));
+        log.info("接口处理完毕: pageShortLink (recycle bin)");
+        return result;
     }
 
     /**
@@ -46,7 +54,9 @@ public class RecycleBinController {
      */
     @PostMapping("/api/short-link/admin/v1/recycle-bin/recover")
     public Result<Void> recoverRecycleBin(@RequestBody RecycleBinRecoverReqDTO requestParam) {
+        log.info("进入接口: recoverRecycleBin");
         recycleBinService.recoverRecycleBin(requestParam);
+        log.info("接口处理完毕: recoverRecycleBin");
         return Results.success();
     }
 
@@ -55,7 +65,9 @@ public class RecycleBinController {
      */
     @PostMapping("/api/short-link/admin/v1/recycle-bin/remove")
     public Result<Void> removeRecycleBin(@RequestBody RecycleBinRemoveReqDTO requestParam) {
+        log.info("进入接口: removeRecycleBin");
         recycleBinService.removeRecycleBin(requestParam);
+        log.info("接口处理完毕: removeRecycleBin");
         return Results.success();
     }
 }
