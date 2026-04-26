@@ -8,13 +8,23 @@
         <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
         <outputRelativeToContentRoot value="true" />
         <module name="shortlink-admin" />
-        <module name="shortlink-gateway" />
         <module name="shortlink-project" />
+        <module name="shortlink-trace-starter" />
+      </profile>
+      <profile name="Annotation profile for shortlink-all" enabled="true">
+        <sourceOutputDir name="target/generated-sources/annotations" />
+        <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
+        <outputRelativeToContentRoot value="true" />
+        <processorPath useClasspath="false">
+          <entry name="$PROJECT_DIR$/../apache-maven-3.9.11-bin/apache-maven-3.9.11/repository/org/projectlombok/lombok/1.18.32/lombok-1.18.32.jar" />
+        </processorPath>
+        <module name="shortlink-main" />
       </profile>
     </annotationProcessing>
     <bytecodeTargetLevel>
       <module name="nacos-demo" target="1.8" />
       <module name="shortlink-aggregation" target="17" />
+      <module name="shortlink-project (1)" target="17" />
       <module name="shortlink-register" target="17" />
     </bytecodeTargetLevel>
   </component>

@@ -12,6 +12,9 @@ RUN npm install --registry=https://registry.npmmirror.com
 # Copy source code
 COPY console-vue/ .
 
+ARG VITE_API_BASE_URL=/api/short-link/admin/v1
+ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
+
 # Build the application
 RUN npm run build
 

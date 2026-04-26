@@ -7,13 +7,11 @@
     <artifactId>shortlink-all</artifactId>
     <version>1.0</version>
     <packaging>pom</packaging>
-    <description>
-        🔥热门推荐🔥SaaS 短链接系统，承载高并发和海量存储等场景难题。专为实习、校招以及社招而出的最新项目，项目质量不亚于12306铁路购票项目。
-    </description>
+    <description>面向工程实践的短链接系统，用于展示前后端分离、容器化部署与可测试性建设能力。</description>
 
     <developers>
         <developer>
-            <name>马丁</name>
+            <name>shortlink-maintainer</name>
             <email>machen@apache.org</email>
             <url>https://github.com/magestacks</url>
             <organization>Apache and openGoofy</organization>
@@ -23,8 +21,6 @@
     <properties>
         <java.version>17</java.version>
         <spring-boot.version>3.0.7</spring-boot.version>
-        <spring-cloud.version>2022.0.3</spring-cloud.version>
-        <spring-cloud-alibaba.version>2022.0.0.0-RC2</spring-cloud-alibaba.version>
         <mybatis-spring-boot-starter.version>3.0.2</mybatis-spring-boot-starter.version>
         <shardingsphere.version>5.3.2</shardingsphere.version>
         <jjwt.version>0.9.1</jjwt.version>
@@ -38,16 +34,12 @@
         <easyexcel.version>3.1.3</easyexcel.version>
         <spotless-maven-plugin.version>2.22.1</spotless-maven-plugin.version>
         <hutool.version>5.8.31</hutool.version>
-        <nacos.version>2.4.1.0</nacos.version>
-        <rocketmq-spring-boot-starter.version>2.3.0</rocketmq-spring-boot-starter.version>
 
     </properties>
 
 
     <modules>
-        <module>admin</module>
-        <module>project</module>
-        <module>gateway</module>
+        <module>main</module>
     </modules>
 
 <dependencies>
@@ -63,22 +55,6 @@
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-dependencies</artifactId>
                 <version>${spring-boot.version}</version>
-                <type>pom</type>
-                <scope>import</scope>
-            </dependency>
-
-            <dependency>
-                <groupId>org.springframework.cloud</groupId>
-                <artifactId>spring-cloud-dependencies</artifactId>
-                <version>${spring-cloud.version}</version>
-                <type>pom</type>
-                <scope>import</scope>
-            </dependency>
-
-            <dependency>
-                <groupId>com.alibaba.cloud</groupId>
-                <artifactId>spring-cloud-alibaba-dependencies</artifactId>
-                <version>${spring-cloud-alibaba.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>

@@ -45,8 +45,7 @@ echo ========================================
 echo.
 echo 访问地址：
 echo   前端页面: http://localhost
-echo   Nacos控制台: http://localhost:8848/nacos
-echo   Gateway API: http://localhost:8000
+echo   Project API: http://localhost/api/short-link/v1
 echo.
 echo 查看日志: docker compose logs -f
 echo 停止服务: docker compose down

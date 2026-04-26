@@ -5,7 +5,7 @@ import router from "@/router";
 import { ElMessage } from 'element-plus'
 
 // const router = useRouter()
-const baseURL = '/api/short-link/admin/v1'
+const baseURL = import.meta.env.VITE_API_BASE_URL || '/api/short-link/v1'
 // 创建实例
 const http = axios.create({
     // api 代理为服务器请求地址

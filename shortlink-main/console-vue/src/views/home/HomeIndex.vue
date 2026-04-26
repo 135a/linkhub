@@ -9,29 +9,15 @@
               class="link-span"
               style="text-decoration: none"
               target="_blank"
-              href="https://nageoffer.com/shortlink/"
-              >官方文档</a
+              href="https://shortlink.nym.asia"
+              >项目首页</a
             >
             <a
               class="link-span"
               style="text-decoration: none"
               target="_blank"
-              href="https://nageoffer.com/planet/group/"
-              >加沟通群</a
-            >
-            <a
-                class="link-span"
-                style="text-decoration: none"
-                target="_blank"
-                href="https://nageoffer.com/shortlink/video/"
-            >🔥视频教程</a
-            >
-            <a
-                class="link-span"
-                style="text-decoration: none"
-                target="_blank"
-                href="http://shortlink.nageoffer.com"
-            >演示环境</a
+              href="https://shortlink.nym.asia/docs"
+              >部署文档</a
             >
             <el-dropdown>
               <div class="block">
