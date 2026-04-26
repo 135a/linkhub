@@ -1,6 +1,6 @@
 <template>
   <div class="login-page">
-    <h1 class="title">短链接管理平台</h1>
+    <h1 class="title">Linkhub-Saas高性能短链接</h1>
     <div class="login-box">
       <!-- 登录 -->
       <div class="logon" :class="{ hidden: !isLogin }">

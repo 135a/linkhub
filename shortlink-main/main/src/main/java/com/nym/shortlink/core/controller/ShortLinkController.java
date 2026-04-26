@@ -1,96 +1,62 @@
-/*
- * Copyright © 2026 NageOffer
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 package com.nym.shortlink.core.controller;
 
-import com.alibaba.csp.sentinel.annotation.SentinelResource;
-import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.nym.shortlink.core.common.convention.result.Result;
 import com.nym.shortlink.core.common.convention.result.Results;
+import com.nym.shortlink.core.service.ShortLinkService;
 import com.nym.shortlink.core.dto.req.ShortLinkBatchCreateReqDTO;
 import com.nym.shortlink.core.dto.req.ShortLinkCreateReqDTO;
 import com.nym.shortlink.core.dto.req.ShortLinkPageReqDTO;
 import com.nym.shortlink.core.dto.req.ShortLinkUpdateReqDTO;
+import com.nym.shortlink.core.dto.resp.ShortLinkBaseInfoRespDTO;
 import com.nym.shortlink.core.dto.resp.ShortLinkBatchCreateRespDTO;
 import com.nym.shortlink.core.dto.resp.ShortLinkCreateRespDTO;
-import com.nym.shortlink.core.dto.resp.ShortLinkGroupCountQueryRespDTO;
 import com.nym.shortlink.core.dto.resp.ShortLinkPageRespDTO;
-import com.nym.shortlink.core.handler.CustomBlockHandler;
-import com.nym.shortlink.core.service.ShortLinkService;
-import jakarta.servlet.ServletRequest;
-import jakarta.servlet.ServletResponse;
+import com.nym.shortlink.core.toolkit.EasyExcelWebUtil;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import lombok.SneakyThrows;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
 /**
- * 短链接控制层
+ * 短链接后管控制层
  */
-@RestController
+@RestController(value = "shortLinkControllerByAdmin")
 @RequiredArgsConstructor
 public class ShortLinkController {
 
     private final ShortLinkService shortLinkService;
 
     /**
-     * 短链接跳转原始链接
-     */
-    @GetMapping("/{short-uri}")
-    public void restoreUrl(@PathVariable("short-uri") String shortUri, ServletRequest request, ServletResponse response) {
-        shortLinkService.restoreUrl(shortUri, request, response);
-    }
-
-    /**
      * 创建短链接
      */
-    @PostMapping("/api/short-link/v1/create")
-    @SentinelResource(
-            value = "create_short-link",
-            blockHandler = "createShortLinkBlockHandlerMethod",
-            blockHandlerClass = CustomBlockHandler.class
-    )
+    @PostMapping("/api/short-link/admin/v1/create")
     public Result<ShortLinkCreateRespDTO> createShortLink(@RequestBody ShortLinkCreateReqDTO requestParam) {
         return Results.success(shortLinkService.createShortLink(requestParam));
     }
 
     /**
-     * 通过分布式锁创建短链接
-     */
-    @PostMapping("/api/short-link/v1/create/by-lock")
-    public Result<ShortLinkCreateRespDTO> createShortLinkByLock(@RequestBody ShortLinkCreateReqDTO requestParam) {
-        return Results.success(shortLinkService.createShortLinkByLock(requestParam));
-    }
-
-    /**
      * 批量创建短链接
      */
-    @PostMapping("/api/short-link/v1/create/batch")
-    public Result<ShortLinkBatchCreateRespDTO> batchCreateShortLink(@RequestBody ShortLinkBatchCreateReqDTO requestParam) {
-        return Results.success(shortLinkService.batchCreateShortLink(requestParam));
+    @SneakyThrows
+    @PostMapping("/api/short-link/admin/v1/create/batch")
+    public void batchCreateShortLink(@RequestBody ShortLinkBatchCreateReqDTO requestParam, HttpServletResponse response) {
+        ShortLinkBatchCreateRespDTO shortLinkBatchCreateRespDTO = shortLinkService.batchCreateShortLink(requestParam);
+        if (shortLinkBatchCreateRespDTO != null) {
+            List<ShortLinkBaseInfoRespDTO> baseLinkInfos = shortLinkBatchCreateRespDTO.getBaseLinkInfos();
+            EasyExcelWebUtil.write(response, "批量创建短链接-短链接系统", ShortLinkBaseInfoRespDTO.class, baseLinkInfos);
+        }
     }
 
     /**
      * 修改短链接
      */
-    @PostMapping("/api/short-link/v1/update")
+    @PostMapping("/api/short-link/admin/v1/update")
     public Result<Void> updateShortLink(@RequestBody ShortLinkUpdateReqDTO requestParam) {
         shortLinkService.updateShortLink(requestParam);
         return Results.success();
@@ -99,16 +65,8 @@ public class ShortLinkController {
     /**
      * 分页查询短链接
      */
-    @GetMapping("/api/short-link/v1/page")
-    public Result<IPage<ShortLinkPageRespDTO>> pageShortLink(ShortLinkPageReqDTO requestParam) {
-        return Results.success(shortLinkService.pageShortLink(requestParam));
-    }
-
-    /**
-     * 查询短链接分组内数量
-     */
-    @GetMapping("/api/short-link/v1/count")
-    public Result<List<ShortLinkGroupCountQueryRespDTO>> listGroupShortLinkCount(@RequestParam("requestParam") List<String> requestParam) {
-        return Results.success(shortLinkService.listGroupShortLinkCount(requestParam));
+    @GetMapping("/api/short-link/admin/v1/page")
+    public Result<Page<ShortLinkPageRespDTO>> pageShortLink(ShortLinkPageReqDTO requestParam) {
+        return Results.success((Page<ShortLinkPageRespDTO>) shortLinkService.pageShortLink(requestParam));
     }
 }

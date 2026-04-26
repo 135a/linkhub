@@ -14,6 +14,6 @@ WORKDIR /app
 
 EXPOSE 8001
 
-COPY project/target/shortlink-project-1.0.jar ./app.jar
+COPY main/target/shortlink-main-1.0.jar ./app.jar
 
 CMD java $JAVA_OPTS -jar app.jar

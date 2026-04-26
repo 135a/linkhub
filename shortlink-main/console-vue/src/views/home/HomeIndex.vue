@@ -3,7 +3,7 @@
     <el-container>
       <el-header height="54px" style="padding: 0">
         <div class="header">
-          <div @click="toMySpace" class="logo">短链通系统</div>
+          <div @click="toMySpace" class="logo">Linkhub-Saas高性能短链接</div>
           <div style="display: flex; align-items: center">
             <a
               class="link-span"

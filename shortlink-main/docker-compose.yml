@@ -86,7 +86,7 @@ services:
   project:
     build:
       context: .
-      dockerfile: project/Dockerfile
+      dockerfile: main/Dockerfile
     container_name: shortlink-project
     ports:
       - "8001:8001"

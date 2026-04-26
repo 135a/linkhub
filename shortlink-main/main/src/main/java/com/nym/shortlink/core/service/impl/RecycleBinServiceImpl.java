@@ -1,26 +1,17 @@
-/*
- * Copyright © 2026 NageOffer
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 package com.nym.shortlink.core.service.impl;
 
 import cn.hutool.core.bean.BeanUtil;
+import cn.hutool.core.collection.CollUtil;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.nym.shortlink.core.common.biz.user.UserContext;
+import com.nym.shortlink.core.common.convention.exception.ServiceException;
+import com.nym.shortlink.core.dao.entity.GroupDO;
 import com.nym.shortlink.core.dao.entity.ShortLinkDO;
+import com.nym.shortlink.core.dao.mapper.GroupMapper;
 import com.nym.shortlink.core.dao.mapper.ShortLinkMapper;
 import com.nym.shortlink.core.dto.req.RecycleBinRecoverReqDTO;
 import com.nym.shortlink.core.dto.req.RecycleBinRemoveReqDTO;
@@ -31,6 +22,8 @@ import com.nym.shortlink.core.service.RecycleBinService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
+
+import java.util.List;
 
 import static com.nym.shortlink.core.common.constant.RedisKeyConstant.GOTO_IS_NULL_SHORT_LINK_KEY;
 import static com.nym.shortlink.core.common.constant.RedisKeyConstant.GOTO_SHORT_LINK_KEY;
@@ -43,6 +36,7 @@ import static com.nym.shortlink.core.common.constant.RedisKeyConstant.GOTO_SHORT
 public class RecycleBinServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLinkDO> implements RecycleBinService {
 
     private final StringRedisTemplate stringRedisTemplate;
+    private final GroupMapper groupMapper;
 
     @Override
     public void saveRecycleBin(RecycleBinSaveReqDTO requestParam) {
@@ -60,6 +54,20 @@ public class RecycleBinServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLin
 
     @Override
     public IPage<ShortLinkPageRespDTO> pageShortLink(ShortLinkRecycleBinPageReqDTO requestParam) {
+        // 如果没有传入 gidList，根据当前用户的分组自动填充
+        if (CollUtil.isEmpty(requestParam.getGidList())) {
+            String username = UserContext.getUsername();
+            if (username != null) {
+                LambdaQueryWrapper<GroupDO> queryWrapper = Wrappers.lambdaQuery(GroupDO.class)
+                        .eq(GroupDO::getUsername, username)
+                        .eq(GroupDO::getDelFlag, 0);
+                List<GroupDO> groupDOList = groupMapper.selectList(queryWrapper);
+                if (CollUtil.isEmpty(groupDOList)) {
+                    throw new ServiceException("用户无分组信息");
+                }
+                requestParam.setGidList(groupDOList.stream().map(GroupDO::getGid).toList());
+            }
+        }
         IPage<ShortLinkDO> resultPage = baseMapper.pageRecycleBinLink(requestParam);
         return resultPage.convert(each -> {
             ShortLinkPageRespDTO result = BeanUtil.toBean(each, ShortLinkPageRespDTO.class);

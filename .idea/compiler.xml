@@ -7,9 +7,6 @@
         <sourceOutputDir name="target/generated-sources/annotations" />
         <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
         <outputRelativeToContentRoot value="true" />
-        <module name="shortlink-admin" />
-        <module name="shortlink-project" />
-        <module name="shortlink-trace-starter" />
       </profile>
       <profile name="Annotation profile for shortlink-all" enabled="true">
         <sourceOutputDir name="target/generated-sources/annotations" />
@@ -23,9 +20,13 @@
     </annotationProcessing>
     <bytecodeTargetLevel>
       <module name="nacos-demo" target="1.8" />
+      <module name="shortlink-admin" target="17" />
       <module name="shortlink-aggregation" target="17" />
+      <module name="shortlink-all (1)" target="17" />
+      <module name="shortlink-project" target="17" />
       <module name="shortlink-project (1)" target="17" />
       <module name="shortlink-register" target="17" />
+      <module name="shortlink-trace-starter" target="17" />
     </bytecodeTargetLevel>
   </component>
 </project>
