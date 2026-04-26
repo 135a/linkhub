@@ -69,7 +69,7 @@ services:
       - "10911:10911"
     environment:
       - NAMESRV_ADDR=rocketmq-namesrv:9876
-      - JAVA_OPT=-Duser.home=/opt -Xms512m -Xmx1024m -Xmn512m -XX:MetaspaceSize=128m -XX:MaxMetaspaceSize=256m
+      - JAVA_OPT_EXT=-server -Xms512m -Xmx1024m -Xmn512m -XX:MetaspaceSize=128m -XX:MaxMetaspaceSize=256m
     command: sh mqbroker -c /home/rocketmq/rocketmq-4.9.4/conf/broker.conf
     depends_on:
       - rocketmq-namesrv
@@ -78,9 +78,9 @@ services:
     deploy:
       resources:
         limits:
-          memory: 1536m
+          memory: 2g
         reservations:
-          memory: 1g
+          memory: 1536m
     restart: unless-stopped
 
   project:
