@@ -26,4 +26,9 @@ public class UserFlowRiskControlConfiguration {
      * 流量风控时间窗口内可访问次数
      */
     private Long maxAccessCount;
+
+    /**
+     * 流量风控忽略路径
+     */
+    private String exclusions;
 }

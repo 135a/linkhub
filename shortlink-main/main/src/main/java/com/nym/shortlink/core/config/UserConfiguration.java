@@ -37,7 +37,6 @@ public class UserConfiguration {
         FilterRegistrationBean<UserFlowRiskControlFilter> registration = new FilterRegistrationBean<>();
         registration.setFilter(new UserFlowRiskControlFilter(stringRedisTemplate, userFlowRiskControlConfiguration));
         registration.addUrlPatterns("/*");
-        registration.addInitParameter("exclusions", "/actuator/*,/api/short-link/v1/metrics/summary");
         registration.setOrder(10);
         return registration;
     }

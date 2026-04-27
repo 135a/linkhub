@@ -19,6 +19,8 @@ import org.springframework.core.io.ClassPathResource;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.scripting.support.ResourceScriptSource;
+import org.springframework.util.AntPathMatcher;
+import org.springframework.util.StringUtils;
 
 import java.io.IOException;
 import java.io.PrintWriter;
@@ -43,18 +45,23 @@ public class UserFlowRiskControlFilter implements Filter {
     public void doFilter(ServletRequest request, ServletResponse response, FilterChain filterChain) throws IOException, ServletException {
         HttpServletRequest httpServletRequest = (HttpServletRequest) request;
         String requestURI = httpServletRequest.getRequestURI();
-        String exclusions = userFlowRiskControlConfiguration.getExclusions(); // Need to add this to config or use init param
-        // For simplicity, let's just check the paths directly here or via a better way
-        if (requestURI.startsWith("/actuator") || requestURI.equals("/api/short-link/v1/metrics/summary")) {
-            filterChain.doFilter(request, response);
-            return;
+        String exclusions = userFlowRiskControlConfiguration.getExclusions();
+        if (StringUtils.hasText(exclusions)) {
+            String[] exclusionArray = exclusions.split(",");
+            AntPathMatcher antPathMatcher = new AntPathMatcher();
+            for (String exclusion : exclusionArray) {
+                if (antPathMatcher.match(exclusion, requestURI)) {
+                    filterChain.doFilter(request, response);
+                    return;
+                }
+            }
         }
         DefaultRedisScript<Long> redisScript = new DefaultRedisScript<>();
         redisScript.setScriptSource(new ResourceScriptSource(new ClassPathResource(USER_FLOW_RISK_CONTROL_LUA_SCRIPT_PATH)));
         redisScript.setResultType(Long.class);
         String username = Optional.ofNullable(UserContext.getUsername())
                 .orElse(((jakarta.servlet.http.HttpServletRequest) request).getHeader("username"));
-        if (!org.springframework.util.StringUtils.hasText(username)) {
+        if (!StringUtils.hasText(username)) {
             username = "other";
         }
         Long result;
