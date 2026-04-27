@@ -73,26 +73,34 @@ public class RBloomFilterConfiguration {
         
         RBloomFilter<String> bloomFilter = redissonClient.getBloomFilter(filterName);
         
+        // 计算预期的 bit size 和 hash iterations
+        long expectedSize = (long) (-expectedInsertions * Math.log(falseProbability) / (Math.log(2) * Math.log(2)));
+        int expectedIterations = (int) Math.max(1, Math.round((double) expectedSize / expectedInsertions * Math.log(2)));
+
         try {
-            // 尝试初始化布隆过滤器
             if (!bloomFilter.isExists()) {
-                boolean initResult = bloomFilter.tryInit(expectedInsertions, falseProbability);
-                if (initResult) {
-                    log.info("布隆过滤器 [{}] 初始化成功，预期插入量: {}, 误判率: {}", 
-                            filterName, expectedInsertions, falseProbability);
-                } else {
-                    log.warn("布隆过滤器 [{}] 已存在，跳过初始化", filterName);
-                }
+                bloomFilter.tryInit(expectedInsertions, falseProbability);
+                log.info("布隆过滤器 [{}] 初始化成功，预期插入量: {}, 误判率: {}", 
+                        filterName, expectedInsertions, falseProbability);
             } else {
-                log.info("布隆过滤器 [{}] 已存在，使用现有配置", filterName);
+                // 如果已存在，校验现有配置是否匹配
+                long actualSize = bloomFilter.getSize();
+                int actualIterations = bloomFilter.getHashIterations();
+                
+                if (actualSize != expectedSize || actualIterations != expectedIterations) {
+                    log.error("布隆过滤器 [{}] 配置冲突！预期: (size={}, iterations={}), 实际: (size={}, iterations={})。正在重建...", 
+                            filterName, expectedSize, expectedIterations, actualSize, actualIterations);
+                    deleteAndRecreateBloomFilter(bloomFilter, redissonClient, filterName, expectedInsertions, falseProbability);
+                } else {
+                    log.info("布隆过滤器 [{}] 已存在且配置匹配，使用现有实例", filterName);
+                }
             }
         } catch (Exception e) {
-            // 捕获配置冲突异常，删除旧数据并重新初始化
             if (e.getMessage() != null && e.getMessage().contains("Bloom filter config has been changed")) {
-                log.error("布隆过滤器 [{}] 配置冲突，正在删除旧数据并重新初始化...", filterName, e);
+                log.error("布隆过滤器 [{}] 检测到配置变更异常，正在强制重建...", filterName);
                 deleteAndRecreateBloomFilter(bloomFilter, redissonClient, filterName, expectedInsertions, falseProbability);
             } else {
-                log.error("布隆过滤器 [{}] 初始化失败", filterName, e);
+                log.error("布隆过滤器 [{}] 初始化过程中出现未知错误", filterName, e);
                 throw e;
             }
         }

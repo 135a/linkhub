@@ -1,14 +1,12 @@
 import axios from 'axios'
-import {getToken, getUsername} from '@/core/auth.js'
+import {getToken, getUsername, removeKey, removeUsername} from '@/core/auth.js'
 import {isNotEmpty} from '@/utils/plugins.js'
 import router from "@/router";
 import { ElMessage } from 'element-plus'
 
-// const router = useRouter()
 const baseURL = import.meta.env.VITE_API_BASE_URL || '/api/short-link/v1'
 // 创建实例
 const http = axios.create({
-    // api 代理为服务器请求地址
     baseURL: baseURL,
     timeout: 15000
 })
@@ -31,18 +29,22 @@ http.interceptors.response.use(
                 ElMessage.error(res.data.message)
                 return Promise.reject(res.data)
             }
-            // 请求成功对响应数据做处理，此处返回的数据是axios.then(res)中接收的数据
-            // code值为 0 或 200 时视为成功
             return Promise.resolve(res)
         }
         return Promise.reject(res)
     },
     (err) => {
-        // 在请求错误时要做的事儿
-        // 此处返回的数据是axios.catch(err)中接收的数据
-        if (err.response.status === 401) {
+        if (err.response && err.response.status === 401) {
+            // 清除所有本地登录态，防止路由守卫误判
             localStorage.removeItem('token')
-            router.push('/login')
+            localStorage.removeItem('username')
+            removeKey()
+            removeUsername()
+            // 避免已经在登录页时重复跳转
+            if (router.currentRoute.value.path !== '/login') {
+                ElMessage.warning('登录已过期，请重新登录')
+                router.push('/login')
+            }
         }
         return Promise.reject(err)
     }

@@ -67,6 +67,9 @@
             <el-button class="addButton" type="primary" style="width: 130px; margin-right: 10px"
               @click="isAddSmallLink = true">创建短链</el-button>
             <el-button style="width: 130px; margin-right: 10px" @click="isAddSmallLinks = true">批量创建</el-button>
+            <el-button style="width: 100px; margin-right: 10px" @click="getGroupInfo(queryPage)">
+              <el-icon style="margin-right: 5px"><Refresh /></el-icon>刷新数据
+            </el-button>
           </div>
         </div>
         <!-- 展示回收站信息 -->
@@ -666,26 +669,39 @@ const showAddGroup = () => {
 }
 // 添加分组
 const addGroup = async () => {
-  addGroupLoading.value = true
-  const res1 = await API.group.addGroup({ name: newGroupName.value })
-  if (res1?.data.success) {
-    ElMessage.success('添加成功')
-    getGroupInfo(queryPage)
-  } else {
-    ElMessage.error(res1?.data.message)
+  if (!newGroupName.value) {
+    ElMessage.warning('分组名称不能为空')
+    return
   }
-  isAddGroup.value = false
-  addGroupLoading.value = false
+  addGroupLoading.value = true
+  try {
+    const res1 = await API.group.addGroup({ name: newGroupName.value })
+    if (res1?.data.success) {
+      ElMessage.success('添加成功')
+      await getGroupInfo()
+      selectedIndex.value = 0
+      queryPage()
+    }
+  } catch (error) {
+    console.error('Add group error:', error)
+  } finally {
+    isAddGroup.value = false
+    addGroupLoading.value = false
+  }
 }
 // 删除分组
 const deleteGroup = async (gid) => {
-  const res = await API.group.deleteGroup({ gid })
-  selectedIndex.value = 0
-  if (res.data.success) {
-    ElMessage.success('删除成功')
-    getGroupInfo(queryPage)
-  } else {
-    ElMessage.error(res.data.message)
+  try {
+    const res = await API.group.deleteGroup({ gid })
+    if (res.data.success) {
+      ElMessage.success('删除成功')
+    }
+  } catch (error) {
+    console.error('Delete group error:', error)
+  } finally {
+    await getGroupInfo()
+    selectedIndex.value = 0
+    queryPage()
   }
 }
 // 编辑分组
@@ -702,15 +718,19 @@ const showEditGroup = (gid, name) => {
 // 编辑分组标题
 const editGroup = async () => {
   editGroupLoading.value = true
-  const res = await API.group.editGroup({ gid: editGid.value, name: editGroupName.value })
-  if (res.data.success) {
-    ElMessage.success('编辑成功')
-    getGroupInfo(queryPage)
-  } else {
-    ElMessage.error('编辑失败')
+  try {
+    const res = await API.group.editGroup({ gid: editGid.value, name: editGroupName.value })
+    if (res.data.success) {
+      ElMessage.success('编辑成功')
+    }
+  } catch (error) {
+    console.error('Edit group error:', error)
+  } finally {
+    await getGroupInfo()
+    queryPage()
+    isEditGroup.value = false
+    editGroupLoading.value = false
   }
-  isEditGroup.value = false
-  editGroupLoading.value = false
 }
 // 创建短链
 const isAddSmallLink = ref(false)
@@ -762,21 +782,18 @@ const coverEditLink = () => {
   isEditLink.value = false
 }
 // 移动到回收站
-const toRecycleBin = (data) => {
+const toRecycleBin = async (data) => {
   const { gid, fullShortUrl } = data
-  API.smallLinkPage
-    .toRecycleBin({ gid, fullShortUrl })
-    .then((res) => {
-      if (res?.data?.code !== '0') {
-        ElMessage.error(res.data.message)
-      } else {
-        ElMessage.success('删除成功')
-        getGroupInfo(queryPage)
-      }
-    })
-    .catch((reason) => {
-      ElMessage.error('删除失败')
-    })
+  try {
+    const res = await API.smallLinkPage.toRecycleBin({ gid, fullShortUrl })
+    if (res?.data?.success) {
+      ElMessage.success('删除成功')
+    }
+  } catch (error) {
+    console.error('To recycle bin error:', error)
+  } finally {
+    getGroupInfo(queryPage)
+  }
 }
 // 回收站中恢复
 const recoverLink = (data) => {

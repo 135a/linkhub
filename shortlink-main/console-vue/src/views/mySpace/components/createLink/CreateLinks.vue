@@ -296,12 +296,10 @@ function downLoadXls(res) {
 const ruleFormRef = ref()
 const submitDisable = ref(false)
 const onSubmit = async (formEl) => {
+  if (!formEl) return
   submitDisable.value = true
-  if (!formEl) {
-    submitDisable.value = false
-    return
-  }
-  await formEl.validate(async (valid, fields) => {
+  try {
+    const valid = await formEl.validate()
     if (valid) {
       let { describes, originUrls } = formData
       describes = transferStrToArray(describes)
@@ -309,20 +307,21 @@ const onSubmit = async (formEl) => {
       const res = await API.smallLinkPage.addLinks({ ...formData, describes, originUrls })
       if (!res.data.data && res.data) {
         ElMessage.success('创建成功！短链列表已开始下载')
-        emits('onSubmit', false)
-        submitDisable.value = false
         downLoadXls(res)
+        initFormData()
       } else if (!res?.data?.success) {
-        ElMessage.error(res?.data?.message)
+        ElMessage.error(res?.data?.message || '创建失败')
       } else {
         ElMessage.success('创建成功！短链列表已开始下载')
-        emits('onSubmit', false)
-        submitDisable.value = false
+        initFormData()
       }
-    } else {
-      // ElMessage.error('创建失败！')
     }
-  })
+  } catch (error) {
+    console.error('Validation or Request error:', error)
+  } finally {
+    emits('onSubmit', false)
+    submitDisable.value = false
+  }
 }
 const cancel = () => {
   emits('cancel', false)

@@ -287,32 +287,30 @@ const emits = defineEmits(['onSubmit', 'cancel'])
 const ruleFormRef = ref()
 const submitDisable = ref(false)
 const onSubmit = async (formEl) => {
+  if (!formEl) return
   submitDisable.value = true
-  if (!formEl) {
-    submitDisable.value = false
-    return
-  }
-  await formEl.validate(async (valid, fields) => {
+  try {
+    const valid = await formEl.validate()
     if (valid) {
       const res = await API.smallLinkPage.addSmallLink(formData)
-      if (!res?.data?.success) {
-        if (res?.data?.code === 'A000001') {
-          ElMessage.warning({
-            message: res.data.message,
-            duration: 5000
-          })
-        } else {
-          ElMessage.error(res.data.message)
-        }
-      } else {
+      if (res?.data?.success) {
         ElMessage.success('创建成功！')
-        emits('onSubmit', false)
-        submitDisable.value = false
+        initFormData()
+      } else {
+        const message = res?.data?.message || '创建失败'
+        if (res?.data?.code === 'A000001') {
+          ElMessage.warning({ message, duration: 5000 })
+        } else {
+          ElMessage.error(message)
+        }
       }
-    } else {
-      ElMessage.error('创建失败！')
     }
-  })
+  } catch (error) {
+    console.error('Validation or Request error:', error)
+  } finally {
+    emits('onSubmit', false)
+    submitDisable.value = false
+  }
 }
 const cancel = () => {
   emits('cancel', false)

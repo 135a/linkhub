@@ -7,9 +7,6 @@
           <span style="font-size: 25px; line-height: 25px; font-weight: 550">{{
             props.title
           }}</span>
-          <span v-if="!isGroup" style="margin-top: 5px; font-size: 15px">{{
-            props.originUrl
-          }}</span>
         </div>
       </div>
       <span v-if="isGroup" style="margin: 5px 0 0 5px">共{{ props.nums }}条短链接</span>
@@ -17,6 +14,9 @@
     <div style="position: absolute; right: 30px; z-index: 999">
       <el-date-picker v-model="dateValue" :clearable="true" type="daterange" range-separator="To" start-placeholder="开始时间"
         end-placeholder="结束时间" value-format="YYYY-MM-DD" :shortcuts="shortcuts" :size="size" />
+      <el-button style="margin-left: 10px;" type="primary" @click="emit('changeTime', dateValue)">
+        <el-icon style="margin-right: 5px"><Refresh /></el-icon>刷新数据
+      </el-button>
     </div>
     <!-- 具体展示内容 -->
     <el-tabs v-model="showPane">

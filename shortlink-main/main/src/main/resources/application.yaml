@@ -1,5 +1,10 @@
 server:
   port: 8001
+  servlet:
+    encoding:
+      charset: UTF-8
+      force: true
+      enabled: true
 
 spring:
   application:
@@ -22,10 +27,10 @@ short-link:
     default: ${DOMAIN:127.0.0.1:8001}
   stats:
     locale:
-      amap-key: 824c511f0997586ea016f979fdb23087
+      amap-key: 99b616b8433a465891a505ab161746af
   goto-domain:
     white-list:
-      enable: true
+      enable: false
       names: '拿个offer,知乎,掘金,博客园'
       details:
         - nageoffer.com
@@ -38,6 +43,7 @@ short-link:
     enable: true
     time-window: 1
     max-access-count: 1000
+    exclusions: /actuator/**,/api/short-link/v1/metrics/summary
 
 mybatis-plus:
   configuration:
