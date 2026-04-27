@@ -37,6 +37,15 @@
             t.create_time DESC
     </select>
 
+    <!-- 分页统计短链接 - COUNT 专用（不含 JOIN，避免 ORDER BY 引用别名 s 报错） -->
+    <select id="pageLinkCount" resultType="java.lang.Long">
+        SELECT COUNT(*)
+        FROM t_link t
+        WHERE t.gid = #{gid}
+          AND t.enable_status = 0
+          AND t.del_flag = 0
+    </select>
+
     <!-- 分页统计回收站短链接 -->
     <select id="pageRecycleBinLink" resultType="com.nym.shortlink.core.dao.entity.ShortLinkDO">
         SELECT t.*,

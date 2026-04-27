@@ -33,6 +33,7 @@ import com.nym.shortlink.core.dto.resp.ShortLinkGroupCountQueryRespDTO;
 import com.nym.shortlink.core.dto.resp.ShortLinkPageRespDTO;
 import com.nym.shortlink.core.mq.producer.ShortLinkStatsSaveProducer;
 import com.nym.shortlink.core.service.CacheMonitoringService;
+import com.nym.shortlink.core.service.PerformanceCounterService;
 import com.nym.shortlink.core.service.ShortLinkService;
 import com.nym.shortlink.core.toolkit.HashUtil;
 import com.nym.shortlink.core.toolkit.LinkUtil;
@@ -94,6 +95,7 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
     private final ShortLinkStatsSaveProducer shortLinkStatsSaveProducer;
     private final GotoDomainWhiteListConfiguration gotoDomainWhiteListConfiguration;
     private final CacheMonitoringService cacheMonitoringService;
+    private final PerformanceCounterService performanceCounterService;
 
     @Value("${short-link.domain.default}")
     private String createShortLinkDefaultDomain;
@@ -102,13 +104,14 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
     @Override
     public ShortLinkCreateRespDTO createShortLink(ShortLinkCreateReqDTO requestParam) {
         //verificationWhitelist(requestParam.getOriginUrl());
-        String shortLinkSuffix = generateSuffix(requestParam);
-        String fullShortUrl = StrBuilder.create(createShortLinkDefaultDomain)
+        String domain = StrUtil.isNotBlank(requestParam.getDomain()) ? requestParam.getDomain() : createShortLinkDefaultDomain;
+        String shortLinkSuffix = generateSuffix(requestParam, domain);
+        String fullShortUrl = StrBuilder.create(domain)
                 .append("/")
                 .append(shortLinkSuffix)
                 .toString();
         ShortLinkDO shortLinkDO = ShortLinkDO.builder()
-                .domain(createShortLinkDefaultDomain)
+                .domain(domain)
                 .originUrl(requestParam.getOriginUrl())
                 .gid(requestParam.getGid())
                 .createdType(requestParam.getCreatedType())
@@ -158,13 +161,14 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
         RLock lock = redissonClient.getLock(SHORT_LINK_CREATE_LOCK_KEY);
         lock.lock();
         try {
-            String shortLinkSuffix = generateSuffixByLock(requestParam);
-            fullShortUrl = StrBuilder.create(createShortLinkDefaultDomain)
+            String domain = StrUtil.isNotBlank(requestParam.getDomain()) ? requestParam.getDomain() : createShortLinkDefaultDomain;
+            String shortLinkSuffix = generateSuffixByLock(requestParam, domain);
+            fullShortUrl = StrBuilder.create(domain)
                     .append("/")
                     .append(shortLinkSuffix)
                     .toString();
             ShortLinkDO shortLinkDO = ShortLinkDO.builder()
-                    .domain(createShortLinkDefaultDomain)
+                    .domain(domain)
                     .originUrl(requestParam.getOriginUrl())
                     .gid(requestParam.getGid())
                     .createdType(requestParam.getCreatedType())
@@ -283,7 +287,7 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
                 delShortLinkDO.setDelFlag(1);
                 baseMapper.update(delShortLinkDO, linkUpdateWrapper);
                 ShortLinkDO shortLinkDO = ShortLinkDO.builder()
-                        .domain(createShortLinkDefaultDomain)
+                        .domain(hasShortLinkDO.getDomain())
                         .originUrl(requestParam.getOriginUrl())
                         .gid(requestParam.getGid())
                         .createdType(hasShortLinkDO.getCreatedType())
@@ -332,7 +336,9 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
         if (StrUtil.isBlank(requestParam.getGid())) {
             throw new ClientException("分组标识不能为空");
         }
+        requestParam.setSearchCount(false);
         IPage<ShortLinkDO> resultPage = baseMapper.pageLink(requestParam);
+        resultPage.setTotal(baseMapper.pageLinkCount(requestParam));
         return resultPage.convert(each -> {
             ShortLinkPageRespDTO result = BeanUtil.toBean(each, ShortLinkPageRespDTO.class);
             result.setDomain("http://" + result.getDomain());
@@ -367,6 +373,8 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
                 .map(each -> ":" + each)
                 .orElse("");
         String fullShortUrl = serverName + serverPort + "/" + shortUri;
+
+        // 1. 先从 Redis 缓存获取
         String originalLink = stringRedisTemplate.opsForValue().get(String.format(GOTO_SHORT_LINK_KEY, fullShortUrl));
         if (StrUtil.isNotBlank(originalLink)) {
             cacheMonitoringService.recordHitAsync();
@@ -374,18 +382,36 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
             ((HttpServletResponse) response).sendRedirect(originalLink);
             return;
         }
+
+        // 2. 判断布隆过滤器（使用当前请求的 fullShortUrl）
         boolean contains = shortUriCreateCachePenetrationBloomFilter.contains(fullShortUrl);
         if (!contains) {
-            cacheMonitoringService.recordMissAsync();
-            ((HttpServletResponse) response).sendRedirect("/page/notfound");
-            return;
+            // 布隆过滤器未命中可能是因为创建时域名与当前域名不同，降级按 shortUri 查库
+            LambdaQueryWrapper<ShortLinkDO> uriQueryWrapper = Wrappers.lambdaQuery(ShortLinkDO.class)
+                    .eq(ShortLinkDO::getShortUri, shortUri)
+                    .eq(ShortLinkDO::getDelFlag, 0)
+                    .eq(ShortLinkDO::getEnableStatus, 0)
+                    .last("LIMIT 1");
+            ShortLinkDO shortLinkByUri = baseMapper.selectOne(uriQueryWrapper);
+            if (shortLinkByUri == null) {
+                cacheMonitoringService.recordMissAsync();
+                performanceCounterService.incrementBloomFilterIntercept();
+                ((HttpServletResponse) response).sendRedirect("/page/notfound");
+                return;
+            }
+            // 找到了，用数据库记录的 fullShortUrl 作为缓存 key 继续流程
+            fullShortUrl = shortLinkByUri.getFullShortUrl();
         }
+
+        // 3. 检查空值缓存（防止缓存穿透）
         String gotoIsNullShortLink = stringRedisTemplate.opsForValue().get(String.format(GOTO_IS_NULL_SHORT_LINK_KEY, fullShortUrl));
         if (StrUtil.isNotBlank(gotoIsNullShortLink)) {
             cacheMonitoringService.recordMissAsync();
             ((HttpServletResponse) response).sendRedirect("/page/notfound");
             return;
         }
+
+        // 4. 加锁查库（双重检查）
         RLock lock = redissonClient.getLock(String.format(LOCK_GOTO_SHORT_LINK_KEY, fullShortUrl));
         lock.lock();
         try {
@@ -481,6 +507,7 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
                 .browser(browser)
                 .device(device)
                 .network(network)
+                .keys(UUID.fastUUID().toString())
                 .currentDate(new Date())
                 .build();
     }
@@ -488,11 +515,13 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
     @Override
     public void shortLinkStats(ShortLinkStatsRecordDTO statsRecord) {
         Map<String, String> producerMap = new HashMap<>();
+        producerMap.put("fullShortUrl", statsRecord.getFullShortUrl());
+        producerMap.put("keys", statsRecord.getKeys());
         producerMap.put("statsRecord", JSON.toJSONString(statsRecord));
         shortLinkStatsSaveProducer.send(producerMap);
     }
 
-    private String generateSuffix(ShortLinkCreateReqDTO requestParam) {
+    private String generateSuffix(ShortLinkCreateReqDTO requestParam, String domain) {
         int customGenerateCount = 0;
         String shorUri;
         while (true) {
@@ -503,7 +532,7 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
             originUrl += UUID.randomUUID().toString();
             shorUri = HashUtil.hashToBase62(originUrl);
 
-            if (!shortUriCreateCachePenetrationBloomFilter.contains(createShortLinkDefaultDomain + "/" + shorUri)) {
+            if (!shortUriCreateCachePenetrationBloomFilter.contains(domain + "/" + shorUri)) {
                 break;
             }
             customGenerateCount++;
@@ -511,7 +540,7 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
         return shorUri;
     }
 
-    private String generateSuffixByLock(ShortLinkCreateReqDTO requestParam) {
+    private String generateSuffixByLock(ShortLinkCreateReqDTO requestParam, String domain) {
         int customGenerateCount = 0;
         String shorUri;
         while (true) {
@@ -523,7 +552,7 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
             shorUri = HashUtil.hashToBase62(originUrl);
             LambdaQueryWrapper<ShortLinkDO> queryWrapper = Wrappers.lambdaQuery(ShortLinkDO.class)
                     .eq(ShortLinkDO::getGid, requestParam.getGid())
-                    .eq(ShortLinkDO::getFullShortUrl, createShortLinkDefaultDomain + "/" + shorUri)
+                    .eq(ShortLinkDO::getFullShortUrl, domain + "/" + shorUri)
                     .eq(ShortLinkDO::getDelFlag, 0);
             ShortLinkDO shortLinkDO = baseMapper.selectOne(queryWrapper);
             if (shortLinkDO == null) {

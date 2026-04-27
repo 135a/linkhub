@@ -32,9 +32,7 @@ public class ShortLinkStatsController {
      */
     @GetMapping("/api/short-link/admin/v1/stats")
     public Result<ShortLinkStatsRespDTO> shortLinkStats(ShortLinkStatsReqDTO requestParam) {
-        log.info("进入接口: shortLinkStats");
         Result<ShortLinkStatsRespDTO> result = Results.success(shortLinkStatsService.oneShortLinkStats(requestParam));
-        log.info("接口处理完毕: shortLinkStats");
         return result;
     }
 
@@ -43,9 +41,7 @@ public class ShortLinkStatsController {
      */
     @GetMapping("/api/short-link/admin/v1/stats/group")
     public Result<ShortLinkStatsRespDTO> groupShortLinkStats(ShortLinkGroupStatsReqDTO requestParam) {
-        log.info("进入接口: groupShortLinkStats");
         Result<ShortLinkStatsRespDTO> result = Results.success(shortLinkStatsService.groupShortLinkStats(requestParam));
-        log.info("接口处理完毕: groupShortLinkStats");
         return result;
     }
 
@@ -54,9 +50,7 @@ public class ShortLinkStatsController {
      */
     @GetMapping("/api/short-link/admin/v1/stats/access-record")
     public Result<IPage<ShortLinkStatsAccessRecordRespDTO>> shortLinkStatsAccessRecord(ShortLinkStatsAccessRecordReqDTO requestParam) {
-        log.info("进入接口: shortLinkStatsAccessRecord");
         Result<IPage<ShortLinkStatsAccessRecordRespDTO>> result = Results.success(shortLinkStatsService.shortLinkStatsAccessRecord(requestParam));
-        log.info("接口处理完毕: shortLinkStatsAccessRecord");
         return result;
     }
 
@@ -65,9 +59,7 @@ public class ShortLinkStatsController {
      */
     @GetMapping("/api/short-link/admin/v1/stats/access-record/group")
     public Result<IPage<ShortLinkStatsAccessRecordRespDTO>> groupShortLinkStatsAccessRecord(ShortLinkGroupStatsAccessRecordReqDTO requestParam) {
-        log.info("进入接口: groupShortLinkStatsAccessRecord");
         Result<IPage<ShortLinkStatsAccessRecordRespDTO>> result = Results.success(shortLinkStatsService.groupShortLinkStatsAccessRecord(requestParam));
-        log.info("接口处理完毕: groupShortLinkStatsAccessRecord");
         return result;
     }
 }

@@ -161,7 +161,7 @@ export function getLasteRoute(fullpath) {
   return '/' + arr[length - 1]
 }
 
-//获取今日日期函数   2023-11-12 23:59:59
+//获取今日日期函数   2023-11-12
 export function getTodayFormatDate() {
   let date = new Date(new Date().getTime()),
     year = date.getFullYear(), //获取完整的年份(4位)
@@ -170,9 +170,9 @@ export function getTodayFormatDate() {
   if (month < 10) month = `0${month}` // 如果月份是个位数，在前面补0
   if (strDate < 10) strDate = `0${strDate}` // 如果日是个位数，在前面补0
 
-  return `${year}-${month}-${strDate}` + ' 23:59:59'
+  return `${year}-${month}-${strDate}`
 }
-// 获取上周的日期   2023-11-12 00:00:00
+// 获取上周的日期   2023-11-12
 export function getLastWeekFormatDate() {
   let nextWeekDate = new Date(new Date().getTime() - 6 * 24 * 60 * 60 * 1000),
     year = nextWeekDate.getFullYear(), //获取完整的年份(4位)
@@ -181,5 +181,5 @@ export function getLastWeekFormatDate() {
   if (month < 10) month = `0${month}` // 如果月份是个位数，在前面补0
   if (strDate < 10) strDate = `0${strDate}` // 如果日是个位数，在前面补0
 
-  return `${year}-${month}-${strDate}` + ' 00:00:00'
+  return `${year}-${month}-${strDate}`
 }

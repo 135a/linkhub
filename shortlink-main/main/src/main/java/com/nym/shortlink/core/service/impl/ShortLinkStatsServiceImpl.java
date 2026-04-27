@@ -4,6 +4,7 @@ import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.date.DateField;
 import cn.hutool.core.date.DateUtil;
+import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
@@ -77,7 +78,18 @@ public class ShortLinkStatsServiceImpl implements ShortLinkStatsService {
         LinkAccessStatsDO pvUvUidStatsByShortLink = linkAccessLogsMapper.findPvUvUidStatsByShortLink(requestParam);
         // 基础访问详情
         List<ShortLinkStatsAccessDailyRespDTO> daily = new ArrayList<>();
-        List<String> rangeDates = DateUtil.rangeToList(DateUtil.parse(requestParam.getStartDate()), DateUtil.parse(requestParam.getEndDate()), DateField.DAY_OF_MONTH).stream()
+        String startDate = requestParam.getStartDate();
+        String endDate = requestParam.getEndDate();
+        // 鲁棒性处理：防止前端传参出现重复时间后缀（如 "2026-04-21 00:00:00 00:00:00"）
+        if (StrUtil.isNotBlank(startDate) && startDate.split(" ").length > 2) {
+            startDate = startDate.split(" ")[0] + " " + startDate.split(" ")[1];
+        }
+        if (StrUtil.isNotBlank(endDate) && endDate.split(" ").length > 2) {
+            endDate = endDate.split(" ")[0] + " " + endDate.split(" ")[1];
+        }
+        requestParam.setStartDate(startDate);
+        requestParam.setEndDate(endDate);
+        List<String> rangeDates = DateUtil.rangeToList(DateUtil.parse(startDate), DateUtil.parse(endDate), DateField.DAY_OF_MONTH).stream()
                 .map(DateUtil::formatDate)
                 .toList();
         rangeDates.forEach(each -> listStatsByShortLink.stream()
@@ -274,7 +286,18 @@ public class ShortLinkStatsServiceImpl implements ShortLinkStatsService {
         LinkAccessStatsDO pvUvUidStatsByGroup = linkAccessLogsMapper.findPvUvUidStatsByGroup(requestParam);
         // 基础访问详情
         List<ShortLinkStatsAccessDailyRespDTO> daily = new ArrayList<>();
-        List<String> rangeDates = DateUtil.rangeToList(DateUtil.parse(requestParam.getStartDate()), DateUtil.parse(requestParam.getEndDate()), DateField.DAY_OF_MONTH).stream()
+        String startDate = requestParam.getStartDate();
+        String endDate = requestParam.getEndDate();
+        // 鲁棒性处理：防止前端传参出现重复时间后缀（如 "2026-04-21 00:00:00 00:00:00"）
+        if (StrUtil.isNotBlank(startDate) && startDate.split(" ").length > 2) {
+            startDate = startDate.split(" ")[0] + " " + startDate.split(" ")[1];
+        }
+        if (StrUtil.isNotBlank(endDate) && endDate.split(" ").length > 2) {
+            endDate = endDate.split(" ")[0] + " " + endDate.split(" ")[1];
+        }
+        requestParam.setStartDate(startDate);
+        requestParam.setEndDate(endDate);
+        List<String> rangeDates = DateUtil.rangeToList(DateUtil.parse(startDate), DateUtil.parse(endDate), DateField.DAY_OF_MONTH).stream()
                 .map(DateUtil::formatDate)
                 .toList();
         rangeDates.forEach(each -> listStatsByGroup.stream()
@@ -430,9 +453,17 @@ public class ShortLinkStatsServiceImpl implements ShortLinkStatsService {
     @Override
     public IPage<ShortLinkStatsAccessRecordRespDTO> shortLinkStatsAccessRecord(ShortLinkStatsAccessRecordReqDTO requestParam) {
         checkGroupBelongToUser(requestParam.getGid());
+        String startDate = requestParam.getStartDate();
+        String endDate = requestParam.getEndDate();
+        if (StrUtil.isNotBlank(startDate) && startDate.split(" ").length > 2) {
+            startDate = startDate.split(" ")[0] + " " + startDate.split(" ")[1];
+        }
+        if (StrUtil.isNotBlank(endDate) && endDate.split(" ").length > 2) {
+            endDate = endDate.split(" ")[0] + " " + endDate.split(" ")[1];
+        }
         LambdaQueryWrapper<LinkAccessLogsDO> queryWrapper = Wrappers.lambdaQuery(LinkAccessLogsDO.class)
                 .eq(LinkAccessLogsDO::getFullShortUrl, requestParam.getFullShortUrl())
-                .between(LinkAccessLogsDO::getCreateTime, requestParam.getStartDate(), requestParam.getEndDate())
+                .between(LinkAccessLogsDO::getCreateTime, startDate, endDate)
                 .eq(LinkAccessLogsDO::getDelFlag, 0)
                 .orderByDesc(LinkAccessLogsDO::getCreateTime);
         IPage<LinkAccessLogsDO> linkAccessLogsDOIPage = linkAccessLogsMapper.selectPage(requestParam, queryWrapper);
@@ -466,6 +497,16 @@ public class ShortLinkStatsServiceImpl implements ShortLinkStatsService {
     @Override
     public IPage<ShortLinkStatsAccessRecordRespDTO> groupShortLinkStatsAccessRecord(ShortLinkGroupStatsAccessRecordReqDTO requestParam) {
         checkGroupBelongToUser(requestParam.getGid());
+        String startDate = requestParam.getStartDate();
+        String endDate = requestParam.getEndDate();
+        if (StrUtil.isNotBlank(startDate) && startDate.split(" ").length > 2) {
+            startDate = startDate.split(" ")[0] + " " + startDate.split(" ")[1];
+        }
+        if (StrUtil.isNotBlank(endDate) && endDate.split(" ").length > 2) {
+            endDate = endDate.split(" ")[0] + " " + endDate.split(" ")[1];
+        }
+        requestParam.setStartDate(startDate);
+        requestParam.setEndDate(endDate);
         IPage<LinkAccessLogsDO> linkAccessLogsDOIPage = linkAccessLogsMapper.selectGroupPage(requestParam);
         if (CollUtil.isEmpty(linkAccessLogsDOIPage.getRecords())) {
             return new Page<>();

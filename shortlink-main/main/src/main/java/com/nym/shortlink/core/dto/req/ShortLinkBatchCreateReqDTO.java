@@ -13,6 +13,11 @@ import java.util.List;
 public class ShortLinkBatchCreateReqDTO {
 
     /**
+     * 域名
+     */
+    private String domain;
+
+    /**
      * 原始链接集合
      */
     private List<String> originUrls;

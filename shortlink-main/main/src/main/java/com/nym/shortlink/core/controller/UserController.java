@@ -37,9 +37,7 @@ public class UserController {
      */
     @GetMapping("/api/short-link/admin/v1/user/{username}")
     public Result<UserRespDTO> getUserByUsername(@PathVariable("username") String username) {
-        log.info("进入接口: getUserByUsername");
         Result<UserRespDTO> result = Results.success(userService.getUserByUsername(username));
-        log.info("接口处理完毕: getUserByUsername");
         return result;
     }
 
@@ -48,9 +46,7 @@ public class UserController {
      */
     @GetMapping("/api/short-link/admin/v1/actual/user/{username}")
     public Result<UserActualRespDTO> getActualUserByUsername(@PathVariable("username") String username) {
-        log.info("进入接口: getActualUserByUsername");
         Result<UserActualRespDTO> result = Results.success(BeanUtil.toBean(userService.getUserByUsername(username), UserActualRespDTO.class));
-        log.info("接口处理完毕: getActualUserByUsername");
         return result;
     }
 
@@ -59,9 +55,7 @@ public class UserController {
      */
     @GetMapping("/api/short-link/admin/v1/user/has-username")
     public Result<Boolean> hasUsername(@RequestParam("username") String username) {
-        log.info("进入接口: hasUsername");
         Result<Boolean> result = Results.success(userService.hasUsername(username));
-        log.info("接口处理完毕: hasUsername");
         return result;
     }
 
@@ -70,9 +64,7 @@ public class UserController {
      */
     @PostMapping("/api/short-link/admin/v1/user")
     public Result<Void> register(@RequestBody UserRegisterReqDTO requestParam) {
-        log.info("进入接口: register");
         userService.register(requestParam);
-        log.info("接口处理完毕: register");
         return Results.success();
     }
 
@@ -81,9 +73,7 @@ public class UserController {
      */
     @PutMapping("/api/short-link/admin/v1/user")
     public Result<Void> update(@RequestBody UserUpdateReqDTO requestParam) {
-        log.info("进入接口: update");
         userService.update(requestParam);
-        log.info("接口处理完毕: update");
         return Results.success();
     }
 
@@ -92,9 +82,7 @@ public class UserController {
      */
     @PostMapping("/api/short-link/admin/v1/user/login")
     public Result<UserLoginRespDTO> login(@RequestBody UserLoginReqDTO requestParam) {
-        log.info("进入接口: login");
         Result<UserLoginRespDTO> result = Results.success(userService.login(requestParam));
-        log.info("接口处理完毕: login");
         return result;
     }
 
@@ -103,9 +91,7 @@ public class UserController {
      */
     @GetMapping("/api/short-link/admin/v1/user/check-login")
     public Result<Boolean> checkLogin(@RequestParam("username") String username, @RequestParam("token") String token) {
-        log.info("进入接口: checkLogin");
         Result<Boolean> result = Results.success(userService.checkLogin(username, token));
-        log.info("接口处理完毕: checkLogin");
         return result;
     }
 
@@ -114,9 +100,7 @@ public class UserController {
      */
     @DeleteMapping("/api/short-link/admin/v1/user/logout")
     public Result<Void> logout(@RequestParam("username") String username, @RequestParam("token") String token) {
-        log.info("进入接口: logout");
         userService.logout(username, token);
-        log.info("接口处理完毕: logout");
         return Results.success();
     }
 }

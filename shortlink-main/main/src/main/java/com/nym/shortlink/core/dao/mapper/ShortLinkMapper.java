@@ -27,6 +27,11 @@ public interface ShortLinkMapper extends BaseMapper<ShortLinkDO> {
     IPage<ShortLinkDO> pageLink(ShortLinkPageReqDTO requestParam);
 
     /**
+     * 分页统计短链接总数
+     */
+    Long pageLinkCount(ShortLinkPageReqDTO requestParam);
+
+    /**
      * 分页统计回收站短链接
      */
     IPage<ShortLinkDO> pageRecycleBinLink(ShortLinkRecycleBinPageReqDTO requestParam);

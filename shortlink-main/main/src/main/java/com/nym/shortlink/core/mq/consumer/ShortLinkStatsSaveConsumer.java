@@ -70,10 +70,10 @@ public class ShortLinkStatsSaveConsumer implements RocketMQListener<Map<String, 
             throw new ServiceException("消息未完成流程，需要消息队列重试");
         }
         try {
-            String fullShortUrl = producerMap.get("fullShortUrl");
-            if (StrUtil.isNotBlank(fullShortUrl)) {
+            ShortLinkStatsRecordDTO statsRecord = JSON.parseObject(producerMap.get("statsRecord"), ShortLinkStatsRecordDTO.class);
+            if (statsRecord != null) {
+                String fullShortUrl = Optional.ofNullable(producerMap.get("fullShortUrl")).orElse(statsRecord.getFullShortUrl());
                 String gid = producerMap.get("gid");
-                ShortLinkStatsRecordDTO statsRecord = JSON.parseObject(producerMap.get("statsRecord"), ShortLinkStatsRecordDTO.class);
                 actualSaveShortLinkStats(fullShortUrl, gid, statsRecord);
             }
         } catch (Throwable ex) {
@@ -113,25 +113,33 @@ public class ShortLinkStatsSaveConsumer implements RocketMQListener<Map<String, 
             Map<String, Object> localeParamMap = new HashMap<>();
             localeParamMap.put("key", statsLocaleAmapKey);
             localeParamMap.put("ip", statsRecord.getRemoteAddr());
-            String localeResultStr = HttpUtil.get(AMAP_REMOTE_URL, localeParamMap);
-            JSONObject localeResultObj = JSON.parseObject(localeResultStr);
-            String infoCode = localeResultObj.getString("infocode");
             String actualProvince = "未知";
             String actualCity = "未知";
-            if (StrUtil.isNotBlank(infoCode) && StrUtil.equals(infoCode, "10000")) {
-                String province = localeResultObj.getString("province");
-                boolean unknownFlag = StrUtil.equals(province, "[]");
-                LinkLocaleStatsDO linkLocaleStatsDO = LinkLocaleStatsDO.builder()
-                        .province(actualProvince = unknownFlag ? actualProvince : province)
-                        .city(actualCity = unknownFlag ? actualCity : localeResultObj.getString("city"))
-                        .adcode(unknownFlag ? "未知" : localeResultObj.getString("adcode"))
-                        .cnt(1)
-                        .fullShortUrl(fullShortUrl)
-                        .country("中国")
-                        .date(new Date())
-                        .build();
-                linkLocaleStatsMapper.shortLinkLocaleState(linkLocaleStatsDO);
+            String actualAdcode = "未知";
+            try {
+                String localeResultStr = HttpUtil.get(AMAP_REMOTE_URL, localeParamMap);
+                JSONObject localeResultObj = JSON.parseObject(localeResultStr);
+                String infoCode = localeResultObj.getString("infocode");
+                if (StrUtil.isNotBlank(infoCode) && StrUtil.equals(infoCode, "10000")) {
+                    String province = localeResultObj.getString("province");
+                    boolean unknownFlag = StrUtil.equals(province, "[]");
+                    actualProvince = unknownFlag ? actualProvince : province;
+                    actualCity = unknownFlag ? actualCity : localeResultObj.getString("city");
+                    actualAdcode = unknownFlag ? "未知" : localeResultObj.getString("adcode");
+                }
+            } catch (Exception ex) {
+                log.error("调用高德地图解析地理位置异常", ex);
             }
+            LinkLocaleStatsDO linkLocaleStatsDO = LinkLocaleStatsDO.builder()
+                    .province(actualProvince)
+                    .city(actualCity)
+                    .adcode(actualAdcode)
+                    .cnt(1)
+                    .fullShortUrl(fullShortUrl)
+                    .country("中国")
+                    .date(new Date())
+                    .build();
+            linkLocaleStatsMapper.shortLinkLocaleState(linkLocaleStatsDO);
             LinkOsStatsDO linkOsStatsDO = LinkOsStatsDO.builder()
                     .os(statsRecord.getOs())
                     .cnt(1)

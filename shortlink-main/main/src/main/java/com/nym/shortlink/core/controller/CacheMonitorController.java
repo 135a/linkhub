@@ -28,9 +28,7 @@ public class CacheMonitorController {
      */
     @GetMapping("/cache-hit-rate/today")
     public Result<CacheMonitoringService.CacheHitRateDTO> getTodayHitRate() {
-        log.info("进入接口: getTodayHitRate");
         Result<CacheMonitoringService.CacheHitRateDTO> result = Results.success(cacheMonitoringService.getTodayHitRate());
-        log.info("接口处理完毕: getTodayHitRate");
         return result;
     }
 
@@ -39,9 +37,7 @@ public class CacheMonitorController {
      */
     @GetMapping("/cache-hit-rate/last-7-days")
     public Result<List<CacheMonitoringService.CacheHitRateDTO>> getLast7DaysHitRate() {
-        log.info("进入接口: getLast7DaysHitRate");
         Result<List<CacheMonitoringService.CacheHitRateDTO>> result = Results.success(cacheMonitoringService.getLast7DaysHitRate());
-        log.info("接口处理完毕: getLast7DaysHitRate");
         return result;
     }
 }

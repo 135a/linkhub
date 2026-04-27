@@ -16,14 +16,10 @@ spring:
     view:
       prefix: /templates/
       suffix: .html
-  cloud:
-    nacos:
-      discovery:
-        server-addr: 127.0.0.1:8848
 
 short-link:
   domain:
-    default: 127.0.0.1:8001
+    default: ${DOMAIN:127.0.0.1:8001}
   stats:
     locale:
       amap-key: 824c511f0997586ea016f979fdb23087
@@ -57,3 +53,12 @@ rocketmq:
     retry-times-when-send-async-failed: 1
   consumer:
     group: short-link_project-service_stats-save_cg
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,metrics,prometheus,info
+  endpoint:
+    health:
+      show-details: always

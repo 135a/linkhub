@@ -5,7 +5,7 @@ const store = createStore({
   state() {
     return {
       // domain: 'nurl.ink'
-      domain: 'link.example.com'
+      domain: import.meta.env.VITE_DOMAIN || 'link.example.com'
     }
   }
 })

@@ -35,9 +35,7 @@ public class GroupController {
      */
     @PostMapping("/api/short-link/admin/v1/group")
     public Result<Void> save(@RequestBody ShortLinkGroupSaveReqDTO requestParam) {
-        log.info("进入接口: save group");
         groupService.saveGroup(requestParam.getName());
-        log.info("接口处理完毕: save group");
         return Results.success();
     }
 
@@ -46,9 +44,7 @@ public class GroupController {
      */
     @GetMapping("/api/short-link/admin/v1/group")
     public Result<List<ShortLinkGroupRespDTO>> listGroup() {
-        log.info("进入接口: listGroup");
         Result<List<ShortLinkGroupRespDTO>> result = Results.success(groupService.listGroup());
-        log.info("接口处理完毕: listGroup");
         return result;
     }
 
@@ -57,9 +53,7 @@ public class GroupController {
      */
     @PutMapping("/api/short-link/admin/v1/group")
     public Result<Void> updateGroup(@RequestBody ShortLinkGroupUpdateReqDTO requestParam) {
-        log.info("进入接口: updateGroup");
         groupService.updateGroup(requestParam);
-        log.info("接口处理完毕: updateGroup");
         return Results.success();
     }
 
@@ -68,9 +62,7 @@ public class GroupController {
      */
     @DeleteMapping("/api/short-link/admin/v1/group")
     public Result<Void> updateGroup(@RequestParam String gid) {
-        log.info("进入接口: deleteGroup");
         groupService.deleteGroup(gid);
-        log.info("接口处理完毕: deleteGroup");
         return Results.success();
     }
 
@@ -79,9 +71,7 @@ public class GroupController {
      */
     @PostMapping("/api/short-link/admin/v1/group/sort")
     public Result<Void> sortGroup(@RequestBody List<ShortLinkGroupSortReqDTO> requestParam) {
-        log.info("进入接口: sortGroup");
         groupService.sortGroup(requestParam);
-        log.info("接口处理完毕: sortGroup");
         return Results.success();
     }
 }

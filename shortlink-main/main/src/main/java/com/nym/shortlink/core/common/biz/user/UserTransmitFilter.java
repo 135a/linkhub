@@ -19,9 +19,9 @@ public class UserTransmitFilter implements Filter {
     @Override
     public void doFilter(ServletRequest servletRequest, ServletResponse servletResponse, FilterChain filterChain) throws IOException, ServletException {
         HttpServletRequest httpServletRequest = (HttpServletRequest) servletRequest;
-        String userId = httpServletRequest.getHeader(UserConstant.USER_ID_KEY);
-        if (StringUtils.hasText(userId)) {
-            String userName = httpServletRequest.getHeader(UserConstant.USER_NAME_KEY);
+        String userName = httpServletRequest.getHeader(UserConstant.USER_NAME_KEY);
+        if (StringUtils.hasText(userName)) {
+            String userId = httpServletRequest.getHeader(UserConstant.USER_ID_KEY);
             String realName = httpServletRequest.getHeader(UserConstant.REAL_NAME_KEY);
             if (StringUtils.hasText(userName)) {
                 userName = URLDecoder.decode(userName, UTF_8);

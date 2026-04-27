@@ -187,7 +187,7 @@ const addUser = (formEl) => {
             localStorage.setItem('username', addForm.username)
           }
           ElMessage.success('注册登录成功！')
-          router.push('/home')
+          window.location.href = '/'
         }
       } else {
         ElMessage.warning('用户名已存在！')
@@ -205,8 +205,13 @@ const login = (formEl) => {
     if (valid) {
       // 演示环境可以按域名做策略限制
       const res1 = await API.user.login(loginForm)
-      if (res1.data.code === '0') {
-        const token = res1?.data?.data?.token
+      let dataObj = res1?.data || res1;
+      if (typeof dataObj === 'string') {
+        try { dataObj = JSON.parse(dataObj); } catch(e) {}
+      }
+      
+      if ((dataObj.code === '0' || dataObj.code == 0 || dataObj.success) || dataObj.token || dataObj.data?.token) {
+        const token = dataObj?.data?.token || dataObj?.token || (typeof dataObj?.data === 'string' ? dataObj.data : null);
         // 将username和token保存到cookies中和localStorage中
         if (token) {
           setToken(token)
@@ -215,13 +220,13 @@ const login = (formEl) => {
           localStorage.setItem('username', loginForm.username)
         }
         ElMessage.success('登录成功！')
-        router.push('/home')
-      } else if (res1.data.message === '用户已登录') {
+        window.location.href = '/'
+      } else if (dataObj && dataObj.message === '用户已登录') {
         // 如果已经登录了，判断一下浏览器保存的登录信息是不是再次登录的信息，如果是就正常登录
         const cookiesUsername = getUsername()
         if (cookiesUsername === loginForm.username) {
           ElMessage.success('登录成功！')
-          router.push('/home')
+          window.location.href = '/'
         } else {
           ElMessage.warning('用户已在别处登录，请勿重复登录！')
         }
@@ -257,7 +262,11 @@ onMounted(() => {
 })
 onBeforeUnmount(() => {
   if (vantaEffect) {
-    vantaEffect.destroy()
+    try {
+      vantaEffect.destroy()
+    } catch (e) {
+      console.warn('Vanta effect destroy failed:', e)
+    }
   }
 })
 // 展示登录还是展示注册

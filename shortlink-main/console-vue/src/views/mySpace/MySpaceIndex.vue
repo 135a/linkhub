@@ -417,14 +417,14 @@ const afterAddLink = () => {
   }
 }
 const statsFormData = reactive({
-  endDate: getTodayFormatDate(),
-  startDate: getLastWeekFormatDate(),
+  endDate: getTodayFormatDate() + ' 23:59:59',
+  startDate: getLastWeekFormatDate() + ' 00:00:00',
   size: 10,
   current: 1
 })
 const initStatsFormData = () => {
-  statsFormData.endDate = getTodayFormatDate()
-  statsFormData.startDate = getLastWeekFormatDate()
+  statsFormData.endDate = getTodayFormatDate() + ' 23:59:59'
+  statsFormData.startDate = getLastWeekFormatDate() + ' 00:00:00'
 }
 const visitLink = {
   fullShortUrl: '',

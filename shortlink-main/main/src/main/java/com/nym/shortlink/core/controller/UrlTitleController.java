@@ -25,9 +25,7 @@ public class UrlTitleController {
      */
     @GetMapping("/api/short-link/admin/v1/title")
     public Result<String> getTitleByUrl(@RequestParam("url") String url) {
-        log.info("进入接口: getTitleByUrl");
         Result<String> result = Results.success(urlTitleService.getTitleByUrl(url));
-        log.info("接口处理完毕: getTitleByUrl");
         return result;
     }
 }
