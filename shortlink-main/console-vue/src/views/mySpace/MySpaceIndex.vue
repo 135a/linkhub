@@ -67,6 +67,12 @@
             <el-button class="addButton" type="primary" style="width: 130px; margin-right: 10px"
               @click="isAddSmallLink = true">创建短链</el-button>
             <el-button style="width: 130px; margin-right: 10px" @click="isAddSmallLinks = true">批量创建</el-button>
+            <el-button style="width: 110px; margin-right: 10px" :disabled="selectedRows.length === 0" @click="exportExcel">
+              <el-icon style="margin-right: 5px"><Download /></el-icon>导出 Excel
+            </el-button>
+            <el-button style="width: 110px; margin-right: 10px" type="danger" :disabled="selectedRows.length === 0" @click="batchDelete">
+              <el-icon style="margin-right: 5px"><Delete /></el-icon>批量删除
+            </el-button>
             <el-button style="width: 100px; margin-right: 10px" @click="getGroupInfo(queryPage)">
               <el-icon style="margin-right: 5px"><Refresh /></el-icon>刷新数据
             </el-button>
@@ -78,8 +84,9 @@
           <span>共{{ recycleBinNums }}条短链接</span>
         </div>
         <!-- 表格展示区域 -->
-        <el-table :data="tableData" height="calc(100vh - 240px)" style="width: calc(100vw - 230px)"
-          :header-cell-style="{ background: '#f7f8fa', color: '#606266' }">
+        <el-table ref="tableRef" :data="tableData" height="calc(100vh - 240px)" style="width: calc(100vw - 230px)"
+          :header-cell-style="{ background: '#f7f8fa', color: '#606266' }"
+          @selection-change="handleSelectionChange">
           <!-- 数据为空时展示的内容 -->
           <template #empty>
             <div style="height: 60vh; display: flex; align-items: center; justify-content: center">
@@ -382,9 +389,10 @@ import CreateLink from './components/createLink/CreateLink.vue'
 import CreateLinks from './components/createLink/CreateLinks.vue'
 import { getTodayFormatDate, getLastWeekFormatDate } from '@/utils/plugins.js'
 import EditLink from './components/editLink/EditLink.vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import defaultImg from '@/assets/png/短链默认图标.png'
 import QRCode from './components/qrCode/QRCode.vue'
+import { Download } from '@element-plus/icons-vue'
 
 // 查看图表的时候传过去展示的，没什么用
 const nums = ref(0)
@@ -400,6 +408,12 @@ const chartsInfo = ref()
 const tableInfo = ref()
 const createLink1Ref = ref()
 const createLink2Ref = ref()
+const tableRef = ref()           // el-table 实例引用
+const selectedRows = ref([])     // 当前多选的短链接行
+// 命名函数处理 selection-change，避免内联箭头函数中 Vue 模板 ref 自动解包导致赋值失效
+const handleSelectionChange = (rows) => {
+  selectedRows.value = rows
+}
 let selectedIndex = ref(0)
 const editableTabs = ref([])
 // 添加弹窗关闭后重新请求一下页面数据
@@ -611,10 +625,14 @@ const queryPage = async () => {
 }
 
 const handleSizeChange = () => {
+  tableRef.value?.clearSelection()
+  selectedRows.value = []
   !isRecycleBin.value ? queryPage() : queryRecycleBinPage()
 }
 
 const handleCurrentChange = () => {
+  tableRef.value?.clearSelection()
+  selectedRows.value = []
   !isRecycleBin.value ? queryPage() : queryRecycleBinPage()
 }
 
@@ -747,6 +765,68 @@ const cancelAddLink = () => {
 }
 const getImgUrl = (url) => {
   return url ?? defaultImg
+}
+
+// 导出 Excel（纯前端，按需动态加载 xlsx 库）
+const exportExcel = async () => {
+  if (selectedRows.value.length === 0) {
+    ElMessage.warning('请先选择要导出的短链接')
+    return
+  }
+  try {
+    const XLSX = await import('xlsx')
+    const data = selectedRows.value.map((row) => ({
+      '描述信息': row.describe || '',
+      '短链接': (row.domain || '') + '/' + (row.shortUri || ''),
+      '原始链接': row.originUrl || '',
+      '创建时间': row.createTime || ''
+    }))
+    const ws = XLSX.utils.json_to_sheet(data)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, '短链接列表')
+    const today = new Date()
+    const dateStr = today.getFullYear() +
+      String(today.getMonth() + 1).padStart(2, '0') +
+      String(today.getDate()).padStart(2, '0')
+    XLSX.writeFile(wb, `shortlinks_${dateStr}.xlsx`)
+  } catch (e) {
+    ElMessage.error('导出失败，请重试')
+    console.error('Export excel error:', e)
+  }
+}
+
+// 批量删除（移入回收站）
+const batchDelete = async () => {
+  const count = selectedRows.value.length
+  if (count === 0) {
+    ElMessage.warning('请先选择要删除的短链接')
+    return
+  }
+  try {
+    await ElMessageBox.confirm(
+      `确定将选中的 ${count} 条短链接移入回收站吗？`,
+      '批量删除确认',
+      { confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning' }
+    )
+  } catch {
+    // 用户点取消，不做任何操作
+    return
+  }
+  const results = await Promise.allSettled(
+    selectedRows.value.map((row) =>
+      API.smallLinkPage.toRecycleBin({ gid: row.gid, fullShortUrl: row.fullShortUrl })
+    )
+  )
+  const successCount = results.filter((r) => r.status === 'fulfilled' && r.value?.data?.success).length
+  const failCount = count - successCount
+  if (failCount === 0) {
+    ElMessage.success(`成功移入回收站 ${successCount} 条`)
+  } else {
+    ElMessage.warning(`成功 ${successCount} 条，失败 ${failCount} 条`)
+  }
+  selectedRows.value = []
+  tableRef.value?.clearSelection()
+  getGroupInfo(queryPage)
 }
 // 判断链接是否过期
 const isExpire = (validDate) => {

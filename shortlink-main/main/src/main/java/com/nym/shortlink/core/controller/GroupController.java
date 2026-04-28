@@ -1,5 +1,6 @@
 package com.nym.shortlink.core.controller;
 
+import com.nym.shortlink.core.common.biz.ratelimit.RateLimit;
 import com.nym.shortlink.core.common.convention.result.Result;
 import com.nym.shortlink.core.common.convention.result.Results;
 import com.nym.shortlink.core.dto.req.ShortLinkGroupSaveReqDTO;
@@ -33,6 +34,7 @@ public class GroupController {
     /**
      * 新增短链接分组
      */
+    @RateLimit(resource = "save_group", qps = 5)
     @PostMapping("/api/short-link/admin/v1/group")
     public Result<Void> save(@RequestBody ShortLinkGroupSaveReqDTO requestParam) {
         groupService.saveGroup(requestParam.getName());
@@ -42,6 +44,7 @@ public class GroupController {
     /**
      * 查询短链接分组集合
      */
+    @RateLimit(resource = "list_group", qps = 20)
     @GetMapping("/api/short-link/admin/v1/group")
     public Result<List<ShortLinkGroupRespDTO>> listGroup() {
         Result<List<ShortLinkGroupRespDTO>> result = Results.success(groupService.listGroup());
@@ -51,6 +54,7 @@ public class GroupController {
     /**
      * 修改短链接分组名称
      */
+    @RateLimit(resource = "update_group", qps = 5)
     @PutMapping("/api/short-link/admin/v1/group")
     public Result<Void> updateGroup(@RequestBody ShortLinkGroupUpdateReqDTO requestParam) {
         groupService.updateGroup(requestParam);
@@ -60,6 +64,7 @@ public class GroupController {
     /**
      * 删除短链接分组
      */
+    @RateLimit(resource = "delete_group", qps = 5)
     @DeleteMapping("/api/short-link/admin/v1/group")
     public Result<Void> updateGroup(@RequestParam String gid) {
         groupService.deleteGroup(gid);
@@ -69,6 +74,7 @@ public class GroupController {
     /**
      * 排序短链接分组
      */
+    @RateLimit(resource = "sort_group", qps = 10)
     @PostMapping("/api/short-link/admin/v1/group/sort")
     public Result<Void> sortGroup(@RequestBody List<ShortLinkGroupSortReqDTO> requestParam) {
         groupService.sortGroup(requestParam);

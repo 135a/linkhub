@@ -67,6 +67,7 @@
 import { reactive, ref, onMounted, nextTick, watch, onBeforeUnmount, getCurrentInstance } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useStore } from 'vuex'
+import { debounce } from 'lodash'
 
 const store = useStore()
 const defaultDomain = store.state.domain ?? ' '
@@ -152,15 +153,37 @@ const isLoading = ref(false)
 //   }
 // }
 // const getTitle = fd(queryTitle, 1000)
+// 防抖延迟 800ms，停止输入后自动查询每行链接对应的标题并填充到描述信息
+const autoFillDescribes = debounce(async (urlText) => {
+  const lines = (urlText || '').split(/\r|\r\n|\n/)
+  isLoading.value = true
+  try {
+    const results = await Promise.all(
+      lines.map(async (line) => {
+        if (reg.test(line)) {
+          try {
+            const res = await API.smallLinkPage.queryTitle({ url: line })
+            return res?.data?.data || ''
+          } catch {
+            return ''
+          }
+        }
+        return ''
+      })
+    )
+    formData.describes = results.join('\n')
+  } finally {
+    isLoading.value = false
+  }
+}, 800)
+
 watch(
   () => formData.originUrls,
   (nV) => {
     originUrlRows.value = (nV || '').split(/\r|\r\n|\n/)?.length ?? 0
-    // // 只有在描述内容为空时才会去查询链接对应的标题
-    // if (!formData.describe) {
-    //   // 外边包一层防抖
-    //   getTitle(nV)
-    // }
+    if (nV) {
+      autoFillDescribes(nV)
+    }
   }
 )
 const maxDescribeRows = ref(100) // 最多多少行
@@ -274,24 +297,6 @@ const transferStrToArray = (str) => {
 // 将组件里面的确认和取消点击事件传出去
 const emits = defineEmits(['onSubmit', 'cancel'])
 
-function downLoadXls(res) {
-  let url = window.URL.createObjectURL(
-    new Blob([res.data], {
-      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-    })
-  )
-  // 创建A标签
-  let link = document.createElement('a')
-  link.style.display = 'none'
-  link.href = url
-  // 设置的下载文件文件名
-  const fileName = decodeURI(res.headers['content-disposition'].split(';')[1].split('filename*=')[1])
-  // 触发点击方法
-  link.setAttribute('download', fileName)
-  document.body.appendChild(link)
-  link.click()
-}
-
 // 点击确定按钮后的校验
 const ruleFormRef = ref()
 const submitDisable = ref(false)
@@ -305,21 +310,17 @@ const onSubmit = async (formEl) => {
       describes = transferStrToArray(describes)
       originUrls = transferStrToArray(originUrls)
       const res = await API.smallLinkPage.addLinks({ ...formData, describes, originUrls })
-      if (!res.data.data && res.data) {
-        ElMessage.success('创建成功！短链列表已开始下载')
-        downLoadXls(res)
+      if (res?.data?.success) {
+        ElMessage.success('创建成功！')
         initFormData()
-      } else if (!res?.data?.success) {
-        ElMessage.error(res?.data?.message || '创建失败')
+        emits('onSubmit', false)
       } else {
-        ElMessage.success('创建成功！短链列表已开始下载')
-        initFormData()
+        ElMessage.error(res?.data?.message || '创建失败')
       }
     }
   } catch (error) {
     console.error('Validation or Request error:', error)
   } finally {
-    emits('onSubmit', false)
     submitDisable.value = false
   }
 }

@@ -163,85 +163,87 @@ const loginFormRule = reactive({
     { min: 8, max: 15, message: '密码长度请在八位以上', trigger: 'blur' }
   ],
 })
+const loading = ref(false)   // 登录/注册请求进行中
 // 注册
 const addUser = (formEl) => {
   if (!formEl) return
   formEl.validate(async (valid) => {
     if (valid) {
-      // 检测用户名是否已经存在
-      const res1 = await API.user.hasUsername({ username: addForm.username })
-      if (res1.data.success !== false) {
-        // 注册
-        const res2 = await API.user.addUser(addForm)
-        // console.log(res2)
-        if (res2.data.success === false) {
-          ElMessage.warning(res2.data.message)
-        } else {
-          const res3 = await API.user.login({ username: addForm.username, password: addForm.password })
-          const token = res3?.data?.data?.token
-          // 将username和token保存到cookies中和localStorage中
-          if (token) {
-            setToken(token)
-            setUsername(addForm.username)
-            localStorage.setItem('token', token)
-            localStorage.setItem('username', addForm.username)
+      loading.value = true
+      try {
+        // 检测用户名是否已经存在
+        const res1 = await API.user.hasUsername({ username: addForm.username })
+        if (res1.data.success !== false) {
+          // 注册
+          const res2 = await API.user.addUser(addForm)
+          if (res2.data.success === false) {
+            ElMessage.warning(res2.data.message)
+          } else {
+            const res3 = await API.user.login({ username: addForm.username, password: addForm.password })
+            const token = res3?.data?.data?.token
+            if (token) {
+              setToken(token)
+              setUsername(addForm.username)
+              localStorage.setItem('token', token)
+              localStorage.setItem('username', addForm.username)
+            }
+            ElMessage.success('注册登录成功！')
+            window.location.href = '/'
           }
-          ElMessage.success('注册登录成功！')
-          window.location.href = '/'
+        } else {
+          ElMessage.warning('用户名已存在！')
         }
-      } else {
-        ElMessage.warning('用户名已存在！')
+      } finally {
+        loading.value = false
       }
     } else {
       return false
     }
   })
-
 }
 // 登录
 const login = (formEl) => {
   if (!formEl) return
   formEl.validate(async (valid) => {
     if (valid) {
-      // 演示环境可以按域名做策略限制
-      const res1 = await API.user.login(loginForm)
-      let dataObj = res1?.data || res1;
-      if (typeof dataObj === 'string') {
-        try { dataObj = JSON.parse(dataObj); } catch(e) {}
-      }
-      
-      if ((dataObj.code === '0' || dataObj.code == 0 || dataObj.success) || dataObj.token || dataObj.data?.token) {
-        const token = dataObj?.data?.token || dataObj?.token || (typeof dataObj?.data === 'string' ? dataObj.data : null);
-        // 将username和token保存到cookies中和localStorage中
-        if (token) {
-          setToken(token)
-          setUsername(loginForm.username)
-          localStorage.setItem('token', token)
-          localStorage.setItem('username', loginForm.username)
+      loading.value = true
+      try {
+        const res1 = await API.user.login(loginForm)
+        let dataObj = res1?.data || res1;
+        if (typeof dataObj === 'string') {
+          try { dataObj = JSON.parse(dataObj); } catch(e) {}
         }
-        ElMessage.success('登录成功！')
-        window.location.href = '/'
-      } else if (dataObj && dataObj.message === '用户已登录') {
-        // 如果已经登录了，判断一下浏览器保存的登录信息是不是再次登录的信息，如果是就正常登录
-        const cookiesUsername = getUsername()
-        if (cookiesUsername === loginForm.username) {
+
+        if ((dataObj.code === '0' || dataObj.code == 0 || dataObj.success) || dataObj.token || dataObj.data?.token) {
+          const token = dataObj?.data?.token || dataObj?.token || (typeof dataObj?.data === 'string' ? dataObj.data : null);
+          if (token) {
+            setToken(token)
+            setUsername(loginForm.username)
+            localStorage.setItem('token', token)
+            localStorage.setItem('username', loginForm.username)
+          }
           ElMessage.success('登录成功！')
           window.location.href = '/'
-        } else {
-          ElMessage.warning('用户已在别处登录，请勿重复登录！')
+        } else if (dataObj && dataObj.message === '用户已登录') {
+          const cookiesUsername = getUsername()
+          if (cookiesUsername === loginForm.username) {
+            ElMessage.success('登录成功！')
+            window.location.href = '/'
+          } else {
+            ElMessage.warning('用户已在别处登录，请勿重复登录！')
+          }
+        } else if (res1.data.message === '用户不存在') {
+          ElMessage.error('请输入正确的账号密码!')
         }
-      } else if (res1.data.message === '用户不存在') {
-        ElMessage.error('请输入正确的账号密码!')
+      } finally {
+        loading.value = false
       }
     } else {
       return false
     }
   })
-
-
 }
 
-const loading = ref(false)
 // 是否记住密码
 const checked = ref(true)
 const vantaRef = ref()

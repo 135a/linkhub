@@ -46,3 +46,18 @@
 #### Scenario: 短链接创建成功后自动关闭弹窗
 - **WHEN** 收到后端返回的创建成功响应
 - **THEN** 前端创建对话框应立即关闭，主页面列表应自动触发数据刷新以展示新生成的短链接。
+
+### Requirement: 短链接管理接口行为约束
+短链接创建、修改、查询、跳转接口在正常 QPS 范围内 SHALL 保持原有响应行为；超过各自 QPS 阈值时 SHALL 返回 HTTP 429 而非原始业务响应。
+
+#### Scenario: 创建短链接未超限
+- **WHEN** `POST /api/short-link/admin/v1/create` 在 1 秒内收到不超过 1 次请求
+- **THEN** 系统 SHALL 正常返回 HTTP 200 和创建结果
+
+#### Scenario: 创建短链接超限
+- **WHEN** `POST /api/short-link/admin/v1/create` 在 1 秒内收到超过 1 次请求
+- **THEN** 系统 SHALL 对超出部分返回 HTTP 429，业务逻辑不执行
+
+#### Scenario: 跳转接口高并发未超限
+- **WHEN** `GET /{shortUri}` 在 1 秒内收到不超过 100 次请求
+- **THEN** 系统 SHALL 正常执行跳转逻辑（重定向到目标 URL）

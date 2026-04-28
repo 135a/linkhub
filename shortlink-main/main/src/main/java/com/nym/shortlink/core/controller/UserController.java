@@ -1,6 +1,7 @@
 package com.nym.shortlink.core.controller;
 
 import cn.hutool.core.bean.BeanUtil;
+import com.nym.shortlink.core.common.biz.ratelimit.RateLimit;
 import com.nym.shortlink.core.common.convention.result.Result;
 import com.nym.shortlink.core.common.convention.result.Results;
 import com.nym.shortlink.core.dto.req.UserLoginReqDTO;
@@ -35,6 +36,7 @@ public class UserController {
     /**
      * 根据用户名查询用户信息
      */
+    @RateLimit(resource = "get_user", qps = 20)
     @GetMapping("/api/short-link/admin/v1/user/{username}")
     public Result<UserRespDTO> getUserByUsername(@PathVariable("username") String username) {
         Result<UserRespDTO> result = Results.success(userService.getUserByUsername(username));
@@ -44,6 +46,7 @@ public class UserController {
     /**
      * 根据用户名查询无脱敏用户信息
      */
+    @RateLimit(resource = "get_actual_user", qps = 20)
     @GetMapping("/api/short-link/admin/v1/actual/user/{username}")
     public Result<UserActualRespDTO> getActualUserByUsername(@PathVariable("username") String username) {
         Result<UserActualRespDTO> result = Results.success(BeanUtil.toBean(userService.getUserByUsername(username), UserActualRespDTO.class));
@@ -53,6 +56,7 @@ public class UserController {
     /**
      * 查询用户名是否存在
      */
+    @RateLimit(resource = "check_username", qps = 20)
     @GetMapping("/api/short-link/admin/v1/user/has-username")
     public Result<Boolean> hasUsername(@RequestParam("username") String username) {
         Result<Boolean> result = Results.success(userService.hasUsername(username));
@@ -62,6 +66,7 @@ public class UserController {
     /**
      * 注册用户
      */
+    @RateLimit(resource = "user_register", qps = 1, message = "操作过于频繁，请稍后再试")
     @PostMapping("/api/short-link/admin/v1/user")
     public Result<Void> register(@RequestBody UserRegisterReqDTO requestParam) {
         userService.register(requestParam);
@@ -71,6 +76,7 @@ public class UserController {
     /**
      * 修改用户
      */
+    @RateLimit(resource = "update_user", qps = 5)
     @PutMapping("/api/short-link/admin/v1/user")
     public Result<Void> update(@RequestBody UserUpdateReqDTO requestParam) {
         userService.update(requestParam);
@@ -80,6 +86,7 @@ public class UserController {
     /**
      * 用户登录
      */
+    @RateLimit(resource = "user_login", qps = 5, message = "登录过于频繁，请稍后再试")
     @PostMapping("/api/short-link/admin/v1/user/login")
     public Result<UserLoginRespDTO> login(@RequestBody UserLoginReqDTO requestParam) {
         Result<UserLoginRespDTO> result = Results.success(userService.login(requestParam));
@@ -98,6 +105,7 @@ public class UserController {
     /**
      * 用户退出登录
      */
+    @RateLimit(resource = "user_logout", qps = 10)
     @DeleteMapping("/api/short-link/admin/v1/user/logout")
     public Result<Void> logout(@RequestParam("username") String username, @RequestParam("token") String token) {
         userService.logout(username, token);

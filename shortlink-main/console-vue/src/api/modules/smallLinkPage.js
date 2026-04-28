@@ -16,11 +16,9 @@ export default {
   },
   addLinks(data) {
     return http({
-      responseType: 'arraybuffer',
       url: '/create/batch',
       method: 'post',
-      data,
-      // responseType: 'blob'
+      data
     })
   },
   editSmallLink(data) {

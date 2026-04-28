@@ -1,6 +1,7 @@
 package com.nym.shortlink.core.controller;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.nym.shortlink.core.common.biz.ratelimit.RateLimit;
 import com.nym.shortlink.core.common.convention.result.Result;
 import com.nym.shortlink.core.common.convention.result.Results;
 import com.nym.shortlink.core.dto.req.RecycleBinRecoverReqDTO;
@@ -30,6 +31,7 @@ public class RecycleBinController {
     /**
      * 保存回收站
      */
+    @RateLimit(resource = "recycle_save", qps = 5)
     @PostMapping("/api/short-link/admin/v1/recycle-bin/save")
     public Result<Void> saveRecycleBin(@RequestBody RecycleBinSaveReqDTO requestParam) {
         recycleBinService.saveRecycleBin(requestParam);
@@ -39,6 +41,7 @@ public class RecycleBinController {
     /**
      * 分页查询回收站短链接
      */
+    @RateLimit(resource = "recycle_page", qps = 20)
     @GetMapping("/api/short-link/admin/v1/recycle-bin/page")
     public Result<IPage<ShortLinkPageRespDTO>> pageShortLink(ShortLinkRecycleBinPageReqDTO requestParam) {
         Result<IPage<ShortLinkPageRespDTO>> result = Results.success(recycleBinService.pageShortLink(requestParam));
@@ -48,6 +51,7 @@ public class RecycleBinController {
     /**
      * 恢复短链接
      */
+    @RateLimit(resource = "recycle_recover", qps = 5)
     @PostMapping("/api/short-link/admin/v1/recycle-bin/recover")
     public Result<Void> recoverRecycleBin(@RequestBody RecycleBinRecoverReqDTO requestParam) {
         recycleBinService.recoverRecycleBin(requestParam);
@@ -57,6 +61,7 @@ public class RecycleBinController {
     /**
      * 移除短链接
      */
+    @RateLimit(resource = "recycle_remove", qps = 5)
     @PostMapping("/api/short-link/admin/v1/recycle-bin/remove")
     public Result<Void> removeRecycleBin(@RequestBody RecycleBinRemoveReqDTO requestParam) {
         recycleBinService.removeRecycleBin(requestParam);
