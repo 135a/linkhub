@@ -7,12 +7,12 @@
         <collectionProp name="Arguments.arguments">
           <elementProp name="host" elementType="Argument">
             <stringProp name="Argument.name">host</stringProp>
-            <stringProp name="Argument.value">localhost</stringProp>
+            <stringProp name="Argument.value">shortlink.nym.asia</stringProp>
             <stringProp name="Argument.metadata">=</stringProp>
           </elementProp>
           <elementProp name="port" elementType="Argument">
             <stringProp name="Argument.name">port</stringProp>
-            <stringProp name="Argument.value">8001</stringProp>
+            <stringProp name="Argument.value">80</stringProp>
             <stringProp name="Argument.metadata">=</stringProp>
           </elementProp>
           <elementProp name="username" elementType="Argument">
@@ -34,7 +34,7 @@
           <!-- 对应该短链接的 fullShortUrl 和 gid，用于查询统计接口 -->
           <elementProp name="fullShortUrl" elementType="Argument">
             <stringProp name="Argument.name">fullShortUrl</stringProp>
-            <stringProp name="Argument.value">localhost:8001/your-uri</stringProp>
+            <stringProp name="Argument.value">shortlink.nym.asia/your-uri</stringProp>
             <stringProp name="Argument.metadata">=</stringProp>
           </elementProp>
           <elementProp name="gid" elementType="Argument">

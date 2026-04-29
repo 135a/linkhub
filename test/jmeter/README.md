@@ -5,10 +5,10 @@
 ## 1. 前置准备
 
 1. **安装 JMeter**: 推荐使用 JMeter 5.5 或更高版本。
-2. **启动服务**: 确保后端工程（8001端口）已正常启动。
+2. **启动服务**: 确保后端工程已通过 Nginx 网关（多域名）正常启动。
 3. **指标查询接口**:
-   - 聚合指标: `http://localhost:8001/api/short-link/v1/metrics/summary`
-   - Actuator 指标: `http://localhost:8001/actuator/prometheus`
+   - 聚合指标: `http://shortlink.nym.asia/api/short-link/v1/metrics/summary`
+   - Actuator 指标: `http://shortlink.nym.asia/actuator/prometheus`
 
 ---
 

@@ -7,12 +7,12 @@
         <collectionProp name="Arguments.arguments">
           <elementProp name="host" elementType="Argument">
             <stringProp name="Argument.name">host</stringProp>
-            <stringProp name="Argument.value">localhost</stringProp>
+            <stringProp name="Argument.value">shortlink.nym.asia</stringProp>
             <stringProp name="Argument.metadata">=</stringProp>
           </elementProp>
           <elementProp name="port" elementType="Argument">
             <stringProp name="Argument.name">port</stringProp>
-            <stringProp name="Argument.value">8001</stringProp>
+            <stringProp name="Argument.value">80</stringProp>
             <stringProp name="Argument.metadata">=</stringProp>
           </elementProp>
           <elementProp name="username" elementType="Argument">
@@ -28,7 +28,7 @@
           <!-- 运行前请先通过 page 接口查询几个真实存在的 fullShortUrl，填入下方 -->
           <elementProp name="fullShortUrl1" elementType="Argument">
             <stringProp name="Argument.name">fullShortUrl1</stringProp>
-            <stringProp name="Argument.value">localhost:8001/aaaaaaaa</stringProp>
+            <stringProp name="Argument.value">shortlink.nym.asia/aaaaaaaa</stringProp>
             <stringProp name="Argument.metadata">=</stringProp>
           </elementProp>
           <elementProp name="gid1" elementType="Argument">

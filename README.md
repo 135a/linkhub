@@ -10,10 +10,10 @@
 **Linkhub-SaaS** 是一款企业级、高性能的短链接管理平台。它不仅提供基础的 URL 缩短功能，更通过**多级缓存**、**异步统计**和**分库分表**等先进技术，支撑千万级高并发重定向与海量访问数据的深度挖掘。
 
 ### ✨ 核心亮点
-- **极速跳转**：利用 Redis 高级数据结构实现毫秒级响应，内置布隆过滤器防御恶意攻击。
-- **海量支撑**：基于 Apache ShardingSphere 实现透明化分库分表，轻松应对亿级数据。
-- **深度洞察**：全方位的访客数据分析，包括 PV/UV、地理位置、设备类型及操作系统。
-- **高可用架构**：基于 RocketMQ 实现统计业务完全异步化，主流程零延迟。
+- **极速跳转**：首创 Caffeine (L1) + Redis (L2) 多级缓存架构，热点短链重定向 P99 < 2ms，内置 Redisson 布隆过滤器彻底防御缓存穿透恶意攻击。
+- **海量支撑**：基于 Apache ShardingSphere 实现透明化分库分表，轻松应对亿级短链映射数据存储。
+- **深度洞察**：引入 ClickHouse 列式数据库专属存储海量访问明细数据，千万级数据量下 PV/UV 等多维报表毫秒级聚合查询。
+- **高并发与高可用**：基于 RocketMQ 将重定向主链路与统计写入流程彻底异步解耦；结合 Sentinel 针对不同场景定制限流策略（读操作快速失败 / 写操作匀速排队），系统稳如磐石。
 
 ---
 
@@ -25,12 +25,13 @@
 | **Spring Boot 3.0.7** | 核心开发框架 |
 | **MyBatis-Plus** | ORM 增强工具 |
 | **ShardingSphere-JDBC** | 数据库水平扩展与分库分表 |
-| **Redis & Redisson** | 多级缓存与分布式锁 |
-| **RocketMQ** | 异步消息队列，解耦统计业务 |
-| **Sentinel** | 流量控制与熔断降级 |
+| **Caffeine & Redis** | L1本地缓存 + L2分布式多级缓存架构 |
+| **RocketMQ** | 异步消息队列，解耦统计业务实现流量削峰 |
+| **ClickHouse** | OLAP 分析型数据库，海量统计数据存储与秒级聚合 |
+| **Sentinel** | 接口级流量控制与熔断降级保护 |
 | **Actuator & Micrometer** | 实时运行指标监控与 Prometheus 暴露 |
 | **JMeter** | 完整的性能压测套件 (位于 test/jmeter) |
-| **Hutool** | 全能 Java 工具类库 |
+| **Nginx & Docker** | 容器化集群部署与多域名路由统一网关 |
 
 ### 前端 (Frontend)
 | 技术 | 说明 |
@@ -55,10 +56,13 @@
 - **Sentinel 限流**: 实时展示触发流控的请求次数，验证**高可用保护**。
 
 ### 2. JMeter 压测套件
-在 `test/jmeter/` 目录下提供了一站式压测资源：
-- **create-qps-test.jmx**: 演示分布式锁 vs 非分布式锁在创建短链时的 QPS 对比。
-- **redirect-cache-test.jmx**: 演示高并发重定向下的毫秒级响应与缓存预热效果。
-- **[面试演示手册](test/jmeter/README.md)**: 包含详细的演示脚本、话术及预期数值基准。
+在 `test/jmeter/` 目录下提供了一站式压测资源，涵盖 6 大核心场景：
+- **redirect-cache-test.jmx**: 演示高并发重定向毫秒级响应、布隆过滤器拦截与缓存命中率预热。
+- **stats-concurrency-test.jmx**: 演示高并发重定向与后台报表查询的「读写分离与异步解耦」性能。
+- **batch-create-test.jmx / bulk-delete-test.jmx**: 演示批量创建吞吐量与高并发批量删除全链路优化。
+- **create-qps-test.jmx**: 演示单条创建时分布式锁防碰撞机制与 Sentinel 动态限流保护。
+- **page-query-test.jmx**: 演示海量数据下复杂聚合分页查询的性能调优对比。
+- **[面试演示实战手册](test/jmeter/README.md)**: 包含详尽的压测步骤、面试引导话术及预期数值基准。
 
 ---
 
@@ -78,10 +82,10 @@ cd shortlink-main
 # 2. 配置环境变量 (可选，默认已提供 .env.example)
 cp .env.example .env
 
-# 3. 启动全栈环境
+# 3. 启动全栈环境 (Nginx 网关、应用、MySQL、Redis、RocketMQ、ClickHouse 等)
 docker-compose up -d --build
 ```
-> 启动后访问：[http://localhost](http://localhost) (账号: `admin` / `admin123`)
+> 💡 **访问说明**：系统已接入多域名 Nginx 网关。请在本地修改 Host 文件（添加 `127.0.0.1 shortlink.nym.asia`），然后通过浏览器访问：[http://shortlink.nym.asia](http://shortlink.nym.asia) (默认账号: `admin` / `admin123`)
 
 ### 3. 本地开发模式
 #### 后端启动：
