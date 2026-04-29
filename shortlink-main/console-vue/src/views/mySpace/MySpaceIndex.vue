@@ -1,6 +1,10 @@
 <template>
-  <div style="display: flex; height: 100%">
+  <div :class="['space-root', { 'sidebar-collapsed': sidebarCollapsed }]" style="display: flex; height: 100%">
     <div class="options-box">
+      <!-- 移动端折叠/展开按钮 -->
+      <div class="sidebar-toggle" @click="sidebarCollapsed = !sidebarCollapsed">
+        <el-icon><ArrowLeft v-if="!sidebarCollapsed" /><ArrowRight v-else /></el-icon>
+      </div>
       <div class="option-title flex-box">
         <div>
           短链分组<span> 共{{ editableTabs?.length }}组</span>
@@ -62,19 +66,17 @@
       <div class="table-box">
         <!-- 默认展示创建短链输入框和按钮 -->
         <div v-if="!isRecycleBin" class="buttons-box">
-          <div style="width: 100%; display: flex">
-            <!-- <el-input style="flex: 1; margin-right: 20px" placeholder="请输入http://或https://开头的连接或引用跳转程序"></el-input> -->
-            <el-button class="addButton" type="primary" style="width: 130px; margin-right: 10px"
-              @click="isAddSmallLink = true">创建短链</el-button>
-            <el-button style="width: 130px; margin-right: 10px" @click="isAddSmallLinks = true">批量创建</el-button>
-            <el-button style="width: 110px; margin-right: 10px" :disabled="selectedRows.length === 0" @click="exportExcel">
-              <el-icon style="margin-right: 5px"><Download /></el-icon>导出 Excel
+          <div style="width: 100%; display: flex; flex-wrap: wrap; gap: 8px; align-items: center">
+            <el-button class="addButton" type="primary" @click="isAddSmallLink = true">创建短链</el-button>
+            <el-button @click="isAddSmallLinks = true">批量创建</el-button>
+            <el-button :disabled="selectedRows.length === 0" @click="exportExcel">
+              <el-icon style="margin-right: 5px"><Download /></el-icon><span class="btn-text">导出 Excel</span>
             </el-button>
-            <el-button style="width: 110px; margin-right: 10px" type="danger" :disabled="selectedRows.length === 0" @click="batchDelete">
-              <el-icon style="margin-right: 5px"><Delete /></el-icon>批量删除
+            <el-button type="danger" :disabled="selectedRows.length === 0" @click="batchDelete">
+              <el-icon style="margin-right: 5px"><Delete /></el-icon><span class="btn-text">批量删除</span>
             </el-button>
-            <el-button style="width: 100px; margin-right: 10px" @click="getGroupInfo(queryPage)">
-              <el-icon style="margin-right: 5px"><Refresh /></el-icon>刷新数据
+            <el-button @click="getGroupInfo(queryPage)">
+              <el-icon style="margin-right: 5px"><Refresh /></el-icon><span class="btn-text">刷新数据</span>
             </el-button>
           </div>
         </div>
@@ -84,7 +86,7 @@
           <span>共{{ recycleBinNums }}条短链接</span>
         </div>
         <!-- 表格展示区域 -->
-        <el-table ref="tableRef" :data="tableData" height="calc(100vh - 240px)" style="width: calc(100vw - 230px)"
+        <el-table ref="tableRef" :data="tableData" height="calc(100vh - 240px)" style="width: 100%"
           :header-cell-style="{ background: '#f7f8fa', color: '#606266' }"
           @selection-change="handleSelectionChange">
           <!-- 数据为空时展示的内容 -->
@@ -381,7 +383,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, getCurrentInstance, watch, nextTick } from 'vue'
+import { ref, reactive, onMounted, onUnmounted, getCurrentInstance, watch, nextTick } from 'vue'
 import Sortable from 'sortablejs'
 import { cloneDeep } from 'lodash'
 import ChartsInfo from './components/chartsInfo/ChartsInfo.vue'
@@ -392,7 +394,11 @@ import EditLink from './components/editLink/EditLink.vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import defaultImg from '@/assets/png/短链默认图标.png'
 import QRCode from './components/qrCode/QRCode.vue'
-import { Download } from '@element-plus/icons-vue'
+import { Download, ArrowLeft, ArrowRight } from '@element-plus/icons-vue'
+import { getToken, getUsername } from '@/core/auth.js'
+
+// 移动端侧边栏折叠状态
+const sidebarCollapsed = ref(false)
 
 // 查看图表的时候传过去展示的，没什么用
 const nums = ref(0)
@@ -594,8 +600,57 @@ watch(
     }
   }
 )
+const handleVisibilityChange = () => {
+  if (document.visibilityState === 'visible') {
+    if (!isRecycleBin.value) {
+      queryPage()
+    } else {
+      queryRecycleBinPage()
+    }
+  }
+}
+
+let sseSource = null
+
 onMounted(() => {
   initSortable('sortOptions')
+  document.addEventListener('visibilitychange', handleVisibilityChange)
+  window.addEventListener('focus', handleVisibilityChange)
+  
+  // 建立 Server-Sent Events 连接，实现后端主动推送更新
+  const username = getUsername()
+  const token = getToken()
+  if (username && token) {
+    sseSource = new EventSource(`/api/short-link/admin/v1/sse/connect?username=${username}&Token=${token}`)
+    sseSource.addEventListener('update', (event) => {
+      // 收到后端推送的数据更新事件
+      try {
+        const data = JSON.parse(event.data)
+        // 如果后端推送的更新属于当前选中的分组，或者干脆简单粗暴直接刷新当前视图
+        if (document.visibilityState === 'visible') {
+          if (!isRecycleBin.value) {
+            queryPage()
+          } else {
+            queryRecycleBinPage()
+          }
+        }
+      } catch (e) {
+        console.error('SSE Error parsing data:', e)
+      }
+    })
+    sseSource.onerror = (error) => {
+      console.error('SSE Connection error:', error)
+      sseSource.close()
+    }
+  }
+})
+
+onUnmounted(() => {
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
+  window.removeEventListener('focus', handleVisibilityChange)
+  if (sseSource) {
+    sseSource.close()
+  }
 })
 const tableData = ref([])
 const pageParams = reactive({
@@ -1237,8 +1292,119 @@ const removeLink = (data) => {
 .sortOptions {
   height: calc(100% - 50px);
   margin-bottom: 50px;
-  // height: 100%;
   overflow-y: auto;
   overflow-x: hidden;
+}
+
+/* ===== 折叠按钮（移动端显示，桌面端隐藏） ===== */
+.sidebar-toggle {
+  display: none;
+  position: absolute;
+  right: -16px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 100;
+  width: 16px;
+  height: 48px;
+  background: #fff;
+  border: 1px solid rgba(0,0,0,0.1);
+  border-left: 0;
+  border-radius: 0 4px 4px 0;
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 2px 0 4px rgba(0,0,0,0.08);
+  font-size: 12px;
+  color: #606266;
+}
+
+.sidebar-toggle:hover {
+  background: #f0f6ff;
+  color: #3677c2;
+}
+
+/* ===== 响应式断点 ===== */
+
+/* 平板（768px - 1024px）：侧栏收窄，按钮精简 */
+@media (max-width: 1024px) and (min-width: 768px) {
+  .options-box {
+    width: 150px !important;
+
+    .item-box {
+      width: 150px !important;
+    }
+  }
+
+  .btn-text {
+    display: none;
+  }
+}
+
+/* 移动端（< 768px）：侧栏可折叠，内容区全宽 */
+@media (max-width: 767px) {
+  .sidebar-toggle {
+    display: flex !important;
+  }
+
+  .options-box {
+    position: absolute;
+    left: 0;
+    top: 0;
+    height: 100%;
+    z-index: 200;
+    box-shadow: 2px 0 8px rgba(0,0,0,0.15);
+    transition: transform 0.25s ease, width 0.25s ease;
+    width: 190px !important;
+    background: #fff;
+  }
+
+  /* 折叠状态：侧栏滑出屏幕左侧 */
+  .sidebar-collapsed .options-box {
+    transform: translateX(-190px);
+    pointer-events: none;
+  }
+
+  /* 折叠时 toggle 按钮随之移动 */
+  .sidebar-collapsed .sidebar-toggle {
+    transform: translateY(-50%) translateX(190px);
+    pointer-events: auto;
+  }
+
+  /* 展开时内容区不变 */
+  .content-box {
+    width: 100% !important;
+    flex: 1;
+  }
+
+  .buttons-box .btn-text {
+    display: none;
+  }
+
+  /* 分页器在移动端居中且简化 */
+  .pagination-block {
+    width: 100%;
+    left: 0 !important;
+    transform: none !important;
+    padding: 0 8px;
+
+    :deep(.el-pagination) {
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    :deep(.el-pagination .el-pagination__sizes) {
+      display: none;
+    }
+
+    :deep(.el-pagination .el-pagination__jump) {
+      display: none;
+    }
+  }
+
+  /* 对话框在移动端全宽 */
+  :deep(.el-dialog) {
+    width: 95vw !important;
+    margin: 5vh auto !important;
+  }
 }
 </style>

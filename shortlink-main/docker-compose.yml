@@ -96,6 +96,7 @@ services:
       - SPRING_PROFILES_ACTIVE=${SPRING_PROFILES_ACTIVE}
       - SPRING_DATA_REDIS_HOST=${SPRING_DATA_REDIS_HOST}
       - ROCKETMQ_NAME_SERVER=${ROCKETMQ_NAME_SERVER}
+      - CLICKHOUSE_HOST=${CLICKHOUSE_HOST}
     depends_on:
       mysql:
         condition: service_healthy
@@ -105,6 +106,8 @@ services:
         condition: service_started
       rocketmq-broker:
         condition: service_started
+      clickhouse:
+        condition: service_healthy
     networks:
       - shortlink-network
     deploy:
@@ -151,9 +154,38 @@ services:
       timeout: 5s
       retries: 10
       start_period: 20s
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.3
+    container_name: shortlink-clickhouse
+    ports:
+      - "8123:8123"
+    volumes:
+      - clickhouse-data:/var/lib/clickhouse
+      - ./clickhouse/init:/docker-entrypoint-initdb.d
+    environment:
+      - CLICKHOUSE_USER=${CLICKHOUSE_USER:-admin}
+      - CLICKHOUSE_PASSWORD=${CLICKHOUSE_PASSWORD:-admin}
+      - CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT=1
+    networks:
+      - shortlink-network
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+        reservations:
+          memory: 512m
+    healthcheck:
+      test: ["CMD-SHELL", "clickhouse-client --query 'SELECT 1' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
 networks:
   shortlink-network:
     driver: bridge
 
 volumes:
   mysql-data:
+  clickhouse-data:

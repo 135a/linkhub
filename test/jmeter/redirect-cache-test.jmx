@@ -88,9 +88,58 @@
           <stringProp name="HTTPSampler.method">GET</stringProp>
           <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
         </HTTPSamplerProxy>
-        <hashTree/>
-        <ConstantTimer guiclass="ConstantTimerGui" testclass="ConstantTimer" testname="Constant Timer">
-          <stringProp name="ConstantTimer.delay">5000</stringProp>
+        <hashTree>
+          <!-- 断言1：响应中必须包含 l1CacheHitRate 字段（三级缓存 L1 命中率） -->
+          <JSONPathAssertion guiclass="JSONPathAssertionGui" testclass="JSONPathAssertion" testname="Assert l1CacheHitRate exists">
+            <stringProp name="JSON_PATH">$.data.l1CacheHitRate</stringProp>
+            <stringProp name="EXPECTED_VALUE"></stringProp>
+            <boolProp name="JSONVALIDATION">false</boolProp>
+            <boolProp name="EXPECT_NULL">false</boolProp>
+            <boolProp name="INVERT">false</boolProp>
+            <boolProp name="ISREGEX">false</boolProp>
+          </JSONPathAssertion>
+          <hashTree/>
+          <!-- 断言2：响应中必须包含 l2CacheHitRate 字段（L1+L2 综合命中率） -->
+          <JSONPathAssertion guiclass="JSONPathAssertionGui" testclass="JSONPathAssertion" testname="Assert l2CacheHitRate exists">
+            <stringProp name="JSON_PATH">$.data.l2CacheHitRate</stringProp>
+            <stringProp name="EXPECTED_VALUE"></stringProp>
+            <boolProp name="JSONVALIDATION">false</boolProp>
+            <boolProp name="EXPECT_NULL">false</boolProp>
+            <boolProp name="INVERT">false</boolProp>
+            <boolProp name="ISREGEX">false</boolProp>
+          </JSONPathAssertion>
+          <hashTree/>
+          <!-- 断言3：响应中必须包含 todayRedirectTotal 字段 -->
+          <JSONPathAssertion guiclass="JSONPathAssertionGui" testclass="JSONPathAssertion" testname="Assert todayRedirectTotal exists">
+            <stringProp name="JSON_PATH">$.data.todayRedirectTotal</stringProp>
+            <stringProp name="EXPECTED_VALUE"></stringProp>
+            <boolProp name="JSONVALIDATION">false</boolProp>
+            <boolProp name="EXPECT_NULL">false</boolProp>
+            <boolProp name="INVERT">false</boolProp>
+            <boolProp name="ISREGEX">false</boolProp>
+          </JSONPathAssertion>
+          <hashTree/>
+          <!-- 提取 l1CacheHitRate 值到变量，便于在日志/断言中观察 -->
+          <JSONPathExtractor guiclass="JSONPathExtractorGui" testclass="JSONPathExtractor" testname="Extract l1CacheHitRate">
+            <stringProp name="VAR">l1HitRate</stringProp>
+            <stringProp name="JSONPATH">$.data.l1CacheHitRate</stringProp>
+            <stringProp name="DEFAULT">N/A</stringProp>
+            <stringProp name="MATCH_NO">0</stringProp>
+            <stringProp name="COMPUTE_CONCAT">false</stringProp>
+          </JSONPathExtractor>
+          <hashTree/>
+          <!-- 提取 l2CacheHitRate 值到变量 -->
+          <JSONPathExtractor guiclass="JSONPathExtractorGui" testclass="JSONPathExtractor" testname="Extract l2CacheHitRate">
+            <stringProp name="VAR">l2HitRate</stringProp>
+            <stringProp name="JSONPATH">$.data.l2CacheHitRate</stringProp>
+            <stringProp name="DEFAULT">N/A</stringProp>
+            <stringProp name="MATCH_NO">0</stringProp>
+            <stringProp name="COMPUTE_CONCAT">false</stringProp>
+          </JSONPathExtractor>
+          <hashTree/>
+        </hashTree>
+        <ConstantTimer guiclass="ConstantTimerGui" testclass="ConstantTimer" testname="Metrics Polling Interval (3s)">
+          <stringProp name="ConstantTimer.delay">3000</stringProp>
         </ConstantTimer>
         <hashTree/>
       </hashTree>

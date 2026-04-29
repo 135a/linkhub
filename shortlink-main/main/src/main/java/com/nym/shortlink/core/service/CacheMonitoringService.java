@@ -18,6 +18,11 @@ public interface CacheMonitoringService {
     void recordHitAsync();
 
     /**
+     * 异步记录 L1 Caffeine 本地缓存命中
+     */
+    void recordL1HitAsync();
+
+    /**
      * 异步记录缓存未命中
      */
     void recordMissAsync();

@@ -7,6 +7,7 @@ import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.github.benmanes.caffeine.cache.Cache;
 import com.nym.shortlink.core.common.biz.user.UserContext;
 import com.nym.shortlink.core.common.convention.exception.ServiceException;
 import com.nym.shortlink.core.dao.entity.GroupDO;
@@ -37,6 +38,7 @@ public class RecycleBinServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLin
 
     private final StringRedisTemplate stringRedisTemplate;
     private final GroupMapper groupMapper;
+    private final Cache<String, String> redirectCache;
 
     @Override
     public void saveRecycleBin(RecycleBinSaveReqDTO requestParam) {
@@ -50,6 +52,8 @@ public class RecycleBinServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLin
                 .build();
         baseMapper.update(shortLinkDO, updateWrapper);
         stringRedisTemplate.delete(String.format(GOTO_SHORT_LINK_KEY, requestParam.getFullShortUrl()));
+        // 主动失效 L1 缓存
+        redirectCache.invalidate(requestParam.getFullShortUrl());
     }
 
     @Override
