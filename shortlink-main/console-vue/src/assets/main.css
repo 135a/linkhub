@@ -1,3 +1,4 @@
+/* ===== 重置样式 ===== */
 body,
 ol,
 ul,
@@ -19,43 +20,71 @@ input,
 textarea,
 select {
   margin: 0;
-  padding: 0
+  padding: 0;
+  box-sizing: border-box;
 }
 
 body {
-  font: 12px"宋体", "Arial Narrow", HELVETICA;
+  font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Helvetica,
+    'PingFang SC', 'Microsoft YaHei', Arial, sans-serif;
+  font-size: 14px;
   background: #fff;
   -webkit-text-size-adjust: 100%;
+  /* 移动端滚动优化 */
+  -webkit-overflow-scrolling: touch;
 }
 
 a {
   color: #2d374b;
-  text-decoration: none
+  text-decoration: none;
 }
 
 a:hover {
   color: #cd0200;
-  text-decoration: underline
+  text-decoration: underline;
 }
 
 em {
-  font-style: normal
+  font-style: normal;
 }
 
 li {
-  list-style: none
+  list-style: none;
 }
 
 img {
   border: 0;
-  vertical-align: middle
+  vertical-align: middle;
+  max-width: 100%;
 }
 
 table {
   border-collapse: collapse;
-  border-spacing: 0
+  border-spacing: 0;
 }
 
 p {
-  word-wrap: break-word
+  word-wrap: break-word;
+}
+
+/* ===== 响应式断点定义 ===== */
+/* Mobile:  < 768px  */
+/* Tablet:  768px - 1023px */
+/* Desktop: >= 1024px */
+
+/* 全局响应式辅助类 */
+.hidden-mobile {
+  display: block;
+}
+
+@media (max-width: 767px) {
+  .hidden-mobile {
+    display: none !important;
+  }
+}
+
+/* 防止移动端横向溢出 */
+html, body, #app {
+  max-width: 100vw;
+  overflow-x: hidden;
 }

@@ -8,9 +8,6 @@ schema: spec-driven
 #     Tech stack: TypeScript, React, Node.js
 #     We use conventional commits
 #     Domain: e-commerce platform
-context: |
-  Output Language: 简体中文 (Simplified Chinese).
-  所有的 OpenSpec 输出文档（包括 proposal、specs、design 和 tasks 等）均必须使用简体中文生成。
 
 # Per-artifact rules (optional)
 # Add custom rules for specific artifacts.
@@ -20,4 +17,4 @@ context: |
 #       - Keep proposals under 500 words
 #       - Always include a "Non-goals" section
 #     tasks:
-#       - Break tasks into chunks of max 2 hou
+#       - Break tasks into chunks of max 2 hours

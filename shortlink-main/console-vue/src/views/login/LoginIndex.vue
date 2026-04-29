@@ -467,4 +467,62 @@ const changeLogin = () => {
     width: 90%;
   }
 }
+
+/* ===== 响应式断点 ===== */
+@media (max-width: 767px) {
+  .login-box {
+    width: 92vw !important;
+    max-width: 420px;
+    padding: 0 20px;
+    border-radius: 16px;
+  }
+
+  .title {
+    font-size: 22px;
+    top: 8%;
+    white-space: nowrap;
+  }
+
+  .move {
+    width: 35%;
+
+    p {
+      font-size: 13px !important;
+    }
+
+    button {
+      font-size: 12px !important;
+    }
+  }
+
+  .form-container1 {
+    transform: translateY(-70%);
+  }
+}
+
+@media (max-width: 480px) {
+  .login-box {
+    width: 96vw !important;
+    padding: 0 14px;
+  }
+
+  .title {
+    font-size: 18px;
+    top: 6%;
+  }
+
+  .move {
+    display: none;
+  }
+
+  .login-box {
+    width: 90vw !important;
+    border-radius: 12px;
+    flex-direction: column;
+  }
+
+  .logon, .register {
+    width: 100% !important;
+  }
+}
 </style>

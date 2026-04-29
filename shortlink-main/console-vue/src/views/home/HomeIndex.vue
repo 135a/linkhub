@@ -3,17 +3,16 @@
     <el-container>
       <el-header height="54px" style="padding: 0">
         <div class="header">
-          <div @click="toMySpace" class="logo">Linkhub-Saas高性能短链接</div>
+          <div @click="toMySpace" class="logo">Linkhub-Saas<span class="logo-full hidden-mobile"> 高性能短链接平台</span></div>
           <div style="display: flex; align-items: center">
-            <a
-              class="link-span"
+            <a class="link-span hidden-mobile"
               style="text-decoration: none"
               target="_blank"
               href="https://shortlink.nym.asia"
               >项目首页</a
             >
             <a
-              class="link-span"
+              class="link-span hidden-mobile"
               style="text-decoration: none"
               target="_blank"
               href="https://shortlink.nym.asia/docs"
@@ -140,7 +139,7 @@ const truncateText = (text, maxLength) => {
 .header {
   color: rgba(0,0,0,.85);
   background-color: #252b30;
-  padding: 0 0 0 20px;
+  padding: 0 16px 0 20px;
   height: 100%;
   display: flex;
   align-items: center;
@@ -155,8 +154,9 @@ const truncateText = (text, maxLength) => {
 }
 
 .content-box {
-  height: calc(100vh - 50px);
+  height: calc(100vh - 54px);
   background-color: white;
+  overflow: hidden;
 }
 
 :deep(.el-tooltip__trigger:focus-visible) {
@@ -165,12 +165,12 @@ const truncateText = (text, maxLength) => {
 
 .logo {
   font-size: 15px;
-  font-weight: 600;
+  font-weight: 700;
   color: #e8e8e8;
-  font-family: Helvetica, Tahoma, Arial, 'PingFang SC', 'Hiragino Sans GB', 'Heiti SC',
-    'Microsoft YaHei', 'WenQuanYi Micro Hei';
-  // font-family: 'Helvetica Neue', Helvetica, STHeiTi, Arial, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Helvetica, 'PingFang SC', sans-serif;
   cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .logo:hover {
@@ -180,11 +180,12 @@ const truncateText = (text, maxLength) => {
 .link-span {
   color: #fff;
   opacity: .6;
-  margin-right: 30px;
-  font-size: 16px;
-  font-family: 'Helvetica Neue', Helvetica, STHeiTi, Arial, sans-serif;
+  margin-right: 20px;
+  font-size: 14px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Helvetica, sans-serif;
   cursor: pointer;
   text-decoration: none;
+  white-space: nowrap;
 }
 
 .link-span:hover {
@@ -195,18 +196,34 @@ const truncateText = (text, maxLength) => {
 
 .name-span {
   color: #fff;
-  opacity: .6;
-  margin-right: 30px;
-  font-size: 12px;
-  font-family: 'Helvetica Neue', Helvetica, STHeiTi, Arial, sans-serif;
+  opacity: .7;
+  margin-right: 12px;
+  font-size: 13px;
   cursor: pointer;
   text-decoration: none;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
+  max-width: 100px;
 }
 
 .avatar {
   transform: translateY(-2px);
+}
+
+/* ===== 响应式断点 ===== */
+@media (max-width: 767px) {
+  .logo {
+    font-size: 13px;
+  }
+
+  .link-span {
+    margin-right: 10px;
+    font-size: 13px;
+  }
+
+  .header {
+    padding: 0 10px 0 12px;
+  }
 }
 </style>

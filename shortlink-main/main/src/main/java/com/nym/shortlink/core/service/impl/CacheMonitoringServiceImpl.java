@@ -33,6 +33,8 @@ public class CacheMonitoringServiceImpl implements CacheMonitoringService {
         return thread;
     });
 
+    private static final String CACHE_L1_HIT_KEY = "short-link:stats:cache:l1hit:daily:";
+
     @Override
     public void recordHitAsync() {
         MONITOR_EXECUTOR.submit(() -> {
@@ -43,6 +45,24 @@ public class CacheMonitoringServiceImpl implements CacheMonitoringService {
                 stringRedisTemplate.expire(key, 7, TimeUnit.DAYS);
             } catch (Exception e) {
                 log.error("记录缓存命中失败", e);
+            }
+        });
+    }
+
+    @Override
+    public void recordL1HitAsync() {
+        MONITOR_EXECUTOR.submit(() -> {
+            try {
+                String today = LocalDate.now().toString();
+                // L1 命中同时也算 L2 命中（L1 是 L2 的子集，总命中数一致）
+                String l2Key = CACHE_HIT_KEY + today;
+                String l1Key = CACHE_L1_HIT_KEY + today;
+                stringRedisTemplate.opsForValue().increment(l2Key);
+                stringRedisTemplate.expire(l2Key, 7, TimeUnit.DAYS);
+                stringRedisTemplate.opsForValue().increment(l1Key);
+                stringRedisTemplate.expire(l1Key, 7, TimeUnit.DAYS);
+            } catch (Exception e) {
+                log.error("记录 L1 缓存命中失败", e);
             }
         });
     }

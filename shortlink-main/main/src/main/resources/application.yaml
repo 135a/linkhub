@@ -68,3 +68,21 @@ management:
   endpoint:
     health:
       show-details: always
+
+# Caffeine L1 本地缓存配置
+caffeine:
+  short-link-redirect:
+    maximum-size: 10000
+    expire-after-write: 30s
+
+# ClickHouse 统计数据源
+clickhouse:
+  datasource:
+    url: jdbc:clickhouse://${CLICKHOUSE_HOST:127.0.0.1}:8123/shortlink_stats
+    username: ${CLICKHOUSE_USER:admin}
+    password: ${CLICKHOUSE_PASSWORD:admin}
+
+# 统计存储策略（clickhouse / mysql）
+stats:
+  storage:
+    primary: clickhouse

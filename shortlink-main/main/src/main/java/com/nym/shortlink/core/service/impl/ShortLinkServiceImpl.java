@@ -13,6 +13,7 @@ import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.github.benmanes.caffeine.cache.Cache;
 import com.nym.shortlink.core.common.convention.exception.ClientException;
 import com.nym.shortlink.core.common.convention.exception.ServiceException;
 import com.nym.shortlink.core.common.enums.VailDateTypeEnum;
@@ -96,6 +97,7 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
     private final GotoDomainWhiteListConfiguration gotoDomainWhiteListConfiguration;
     private final CacheMonitoringService cacheMonitoringService;
     private final PerformanceCounterService performanceCounterService;
+    private final Cache<String, String> redirectCache;
 
     @Value("${short-link.domain.default}")
     private String createShortLinkDefaultDomain;
@@ -321,6 +323,8 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
                 || !Objects.equals(hasShortLinkDO.getValidDate(), requestParam.getValidDate())
                 || !Objects.equals(hasShortLinkDO.getOriginUrl(), requestParam.getOriginUrl())) {
             stringRedisTemplate.delete(String.format(GOTO_SHORT_LINK_KEY, requestParam.getFullShortUrl()));
+            // 主动失效 L1 缓存
+            redirectCache.invalidate(requestParam.getFullShortUrl());
             Date currentDate = new Date();
             if (hasShortLinkDO.getValidDate() != null && hasShortLinkDO.getValidDate().before(currentDate)) {
                 if (Objects.equals(requestParam.getValidDateType(), VailDateTypeEnum.PERMANENT.getType()) || requestParam.getValidDate().after(currentDate)) {
@@ -374,10 +378,21 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
                 .orElse("");
         String fullShortUrl = serverName + serverPort + "/" + shortUri;
 
-        // 1. 先从 Redis 缓存获取
+        // 0. L1 Caffeine 本地缓存（优先级最高）
+        String l1CachedLink = redirectCache.getIfPresent(fullShortUrl);
+        if (StrUtil.isNotBlank(l1CachedLink)) {
+            cacheMonitoringService.recordL1HitAsync();
+            shortLinkStats(buildLinkStatsRecordAndSetUser(fullShortUrl, request, response));
+            ((HttpServletResponse) response).sendRedirect(l1CachedLink);
+            return;
+        }
+
+        // 1. 先从 Redis 缓存获取（L2）
         String originalLink = stringRedisTemplate.opsForValue().get(String.format(GOTO_SHORT_LINK_KEY, fullShortUrl));
         if (StrUtil.isNotBlank(originalLink)) {
             cacheMonitoringService.recordHitAsync();
+            // 回填 L1
+            redirectCache.put(fullShortUrl, originalLink);
             shortLinkStats(buildLinkStatsRecordAndSetUser(fullShortUrl, request, response));
             ((HttpServletResponse) response).sendRedirect(originalLink);
             return;
@@ -418,6 +433,8 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
             originalLink = stringRedisTemplate.opsForValue().get(String.format(GOTO_SHORT_LINK_KEY, fullShortUrl));
             if (StrUtil.isNotBlank(originalLink)) {
                 cacheMonitoringService.recordHitAsync();
+                // 回填 L1
+                redirectCache.put(fullShortUrl, originalLink);
                 shortLinkStats(buildLinkStatsRecordAndSetUser(fullShortUrl, request, response));
                 ((HttpServletResponse) response).sendRedirect(originalLink);
                 return;
@@ -454,6 +471,8 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
                     shortLinkDO.getOriginUrl(),
                     LinkUtil.getLinkCacheValidTime(shortLinkDO.getValidDate()), TimeUnit.MILLISECONDS
             );
+            // 回填 L1 缓存
+            redirectCache.put(fullShortUrl, shortLinkDO.getOriginUrl());
             cacheMonitoringService.recordMissAsync();
             shortLinkStats(buildLinkStatsRecordAndSetUser(fullShortUrl, request, response));
             ((HttpServletResponse) response).sendRedirect(shortLinkDO.getOriginUrl());

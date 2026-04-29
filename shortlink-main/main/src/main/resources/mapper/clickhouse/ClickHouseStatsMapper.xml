@@ -1,0 +1,141 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.nym.shortlink.core.dao.mapper.clickhouse.ClickHouseStatsMapper">
+
+    <!-- 访问统计（PV/UV/UIP） -->
+    <insert id="insertAccessStats">
+        INSERT INTO shortlink_stats.link_access_stats
+            (full_short_url, date, pv, uv, uip, hour, weekday)
+        VALUES
+            (#{fullShortUrl}, #{date}, #{pv}, #{uv}, #{uip}, #{hour}, #{weekday})
+    </insert>
+
+    <!-- 地理位置统计 -->
+    <insert id="insertLocaleStats">
+        INSERT INTO shortlink_stats.link_locale_stats
+            (full_short_url, date, cnt, province, city, adcode, country)
+        VALUES
+            (#{fullShortUrl}, #{date}, #{cnt}, #{province}, #{city}, #{adcode}, #{country})
+    </insert>
+
+    <!-- 操作系统统计 -->
+    <insert id="insertOsStats">
+        INSERT INTO shortlink_stats.link_os_stats
+            (full_short_url, date, cnt, os)
+        VALUES
+            (#{fullShortUrl}, #{date}, #{cnt}, #{os})
+    </insert>
+
+    <!-- 浏览器统计 -->
+    <insert id="insertBrowserStats">
+        INSERT INTO shortlink_stats.link_browser_stats
+            (full_short_url, date, cnt, browser)
+        VALUES
+            (#{fullShortUrl}, #{date}, #{cnt}, #{browser})
+    </insert>
+
+    <!-- 设备统计 -->
+    <insert id="insertDeviceStats">
+        INSERT INTO shortlink_stats.link_device_stats
+            (full_short_url, date, cnt, device)
+        VALUES
+            (#{fullShortUrl}, #{date}, #{cnt}, #{device})
+    </insert>
+
+    <!-- 网络类型统计 -->
+    <insert id="insertNetworkStats">
+        INSERT INTO shortlink_stats.link_network_stats
+            (full_short_url, date, cnt, network)
+        VALUES
+            (#{fullShortUrl}, #{date}, #{cnt}, #{network})
+    </insert>
+
+    <!-- 访问日志明细 -->
+    <insert id="insertAccessLog">
+        INSERT INTO shortlink_stats.link_access_logs
+            (full_short_url, user, ip, browser, os, network, device, locale)
+        VALUES
+            (#{fullShortUrl}, #{user}, #{ip}, #{browser}, #{os}, #{network}, #{device}, #{locale})
+    </insert>
+
+    <!-- 今日实时统计 -->
+    <insert id="insertStatsTodayStats">
+        INSERT INTO shortlink_stats.link_stats_today
+            (full_short_url, date, today_pv, today_uv, today_uip)
+        VALUES
+            (#{fullShortUrl}, #{date}, #{todayPv}, #{todayUv}, #{todayUip})
+    </insert>
+
+    <!-- ===================== 聚合查询 SQL ===================== -->
+
+    <!-- 按天查询单链接 PV/UV/UIP（ClickHouse 列存聚合） -->
+    <select id="listDailyStatsByShortLink" resultType="map">
+        SELECT
+            formatDateTime(date, '%Y-%m-%d') AS date,
+            SUM(pv)  AS pv,
+            SUM(uv)  AS uv,
+            SUM(uip) AS uip
+        FROM shortlink_stats.link_access_stats
+        WHERE full_short_url = #{fullShortUrl}
+          AND shortlink_stats.link_access_stats.date >= toDate(#{startDate})
+          AND shortlink_stats.link_access_stats.date &lt;= toDate(#{endDate})
+        GROUP BY shortlink_stats.link_access_stats.date
+        ORDER BY shortlink_stats.link_access_stats.date
+    </select>
+
+    <!-- 汇总单链接总 PV/UV/UIP -->
+    <select id="sumPvUvUipByShortLink" resultType="map">
+        SELECT
+            SUM(pv)  AS pv,
+            SUM(uv)  AS uv,
+            SUM(uip) AS uip
+        FROM shortlink_stats.link_access_stats
+        WHERE full_short_url = #{fullShortUrl}
+          AND date >= toDate(#{startDate})
+          AND date &lt;= toDate(#{endDate})
+    </select>
+
+    <!-- 查询单链接地区分布（省级，降序取前 10） -->
+    <select id="listLocaleStatsByShortLink" resultType="map">
+        SELECT
+            province,
+            SUM(cnt) AS cnt
+        FROM shortlink_stats.link_locale_stats
+        WHERE full_short_url = #{fullShortUrl}
+          AND date >= toDate(#{startDate})
+          AND date &lt;= toDate(#{endDate})
+        GROUP BY province
+        ORDER BY cnt DESC
+        LIMIT 10
+    </select>
+
+    <!-- 查询访问日志明细（分页） -->
+    <select id="listAccessLogsByShortLink" resultType="map">
+        SELECT
+            user,
+            ip,
+            browser,
+            os,
+            network,
+            device,
+            locale,
+            formatDateTime(create_time, '%Y-%m-%d %H:%M:%S') AS createTime
+        FROM shortlink_stats.link_access_logs
+        WHERE full_short_url = #{fullShortUrl}
+          AND toDate(create_time) >= toDate(#{startDate})
+          AND toDate(create_time) &lt;= toDate(#{endDate})
+        ORDER BY create_time DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <!-- 查询访问日志总数（分页计数） -->
+    <select id="countAccessLogsByShortLink" resultType="long">
+        SELECT COUNT(*)
+        FROM shortlink_stats.link_access_logs
+        WHERE full_short_url = #{fullShortUrl}
+          AND toDate(create_time) >= toDate(#{startDate})
+          AND toDate(create_time) &lt;= toDate(#{endDate})
+    </select>
+
+</mapper>

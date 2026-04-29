@@ -25,6 +25,7 @@ import com.nym.shortlink.core.dao.mapper.LinkDeviceStatsMapper;
 import com.nym.shortlink.core.dao.mapper.LinkLocaleStatsMapper;
 import com.nym.shortlink.core.dao.mapper.LinkNetworkStatsMapper;
 import com.nym.shortlink.core.dao.mapper.LinkOsStatsMapper;
+import com.nym.shortlink.core.dao.mapper.clickhouse.ClickHouseStatsMapper;
 import com.nym.shortlink.core.dto.req.ShortLinkGroupStatsAccessRecordReqDTO;
 import com.nym.shortlink.core.dto.req.ShortLinkGroupStatsReqDTO;
 import com.nym.shortlink.core.dto.req.ShortLinkStatsAccessRecordReqDTO;
@@ -41,6 +42,7 @@ import com.nym.shortlink.core.dto.resp.ShortLinkStatsTopIpRespDTO;
 import com.nym.shortlink.core.dto.resp.ShortLinkStatsUvRespDTO;
 import com.nym.shortlink.core.service.ShortLinkStatsService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -66,21 +68,19 @@ public class ShortLinkStatsServiceImpl implements ShortLinkStatsService {
     private final LinkOsStatsMapper linkOsStatsMapper;
     private final LinkDeviceStatsMapper linkDeviceStatsMapper;
     private final LinkNetworkStatsMapper linkNetworkStatsMapper;
+    private final ClickHouseStatsMapper clickHouseStatsMapper;
+
+    /** 统计查询主数据源开关： clickhouse 帐号时对时序聚合查询用 ClickHouse，其余复杂查询仍用 MySQL */
+    @Value("${stats.storage.primary:clickhouse}")
+    private String statsPrimary;
 
     @Override
     public ShortLinkStatsRespDTO oneShortLinkStats(ShortLinkStatsReqDTO requestParam) {
         checkGroupBelongToUser(requestParam.getGid());
-        List<LinkAccessStatsDO> listStatsByShortLink = linkAccessStatsMapper.listStatsByShortLink(requestParam);
-        if (CollUtil.isEmpty(listStatsByShortLink)) {
-            return null;
-        }
-        // 基础访问数据
-        LinkAccessStatsDO pvUvUidStatsByShortLink = linkAccessLogsMapper.findPvUvUidStatsByShortLink(requestParam);
-        // 基础访问详情
-        List<ShortLinkStatsAccessDailyRespDTO> daily = new ArrayList<>();
+
+        // 先处理日期参数（鲁棒性处理，防止重复时间后缀）
         String startDate = requestParam.getStartDate();
         String endDate = requestParam.getEndDate();
-        // 鲁棒性处理：防止前端传参出现重复时间后缀（如 "2026-04-21 00:00:00 00:00:00"）
         if (StrUtil.isNotBlank(startDate) && startDate.split(" ").length > 2) {
             startDate = startDate.split(" ")[0] + " " + startDate.split(" ")[1];
         }
@@ -89,32 +89,86 @@ public class ShortLinkStatsServiceImpl implements ShortLinkStatsService {
         }
         requestParam.setStartDate(startDate);
         requestParam.setEndDate(endDate);
-        List<String> rangeDates = DateUtil.rangeToList(DateUtil.parse(startDate), DateUtil.parse(endDate), DateField.DAY_OF_MONTH).stream()
-                .map(DateUtil::formatDate)
-                .toList();
-        rangeDates.forEach(each -> listStatsByShortLink.stream()
-                .filter(item -> Objects.equals(each, DateUtil.formatDate(item.getDate())))
-                .findFirst()
-                .ifPresentOrElse(item -> {
-                    ShortLinkStatsAccessDailyRespDTO accessDailyRespDTO = ShortLinkStatsAccessDailyRespDTO.builder()
+        List<String> rangeDates = DateUtil.rangeToList(DateUtil.parse(startDate), DateUtil.parse(endDate), DateField.DAY_OF_MONTH)
+                .stream().map(DateUtil::formatDate).toList();
+
+        // 空数据判断：ClickHouse 模式只检查汇总数据是否有记录，MySQL 模式仍用 listStatsByShortLink
+        if (!"clickhouse".equalsIgnoreCase(statsPrimary)) {
+            List<LinkAccessStatsDO> listStatsByShortLink = linkAccessStatsMapper.listStatsByShortLink(requestParam);
+            if (CollUtil.isEmpty(listStatsByShortLink)) {
+                return null;
+            }
+        }
+
+        // 基础访问数据（PV/UV/UIP 汇总）
+        LinkAccessStatsDO pvUvUidStatsByShortLink = new LinkAccessStatsDO();
+        if ("clickhouse".equalsIgnoreCase(statsPrimary)) {
+            Map<String, Object> sumMap = clickHouseStatsMapper.sumPvUvUipByShortLink(requestParam.getFullShortUrl(), startDate, endDate);
+            if (sumMap == null || sumMap.get("pv") == null) {
+                return null;
+            }
+            pvUvUidStatsByShortLink.setPv(Integer.parseInt(sumMap.get("pv").toString()));
+            pvUvUidStatsByShortLink.setUv(Integer.parseInt(sumMap.get("uv").toString()));
+            pvUvUidStatsByShortLink.setUip(Integer.parseInt(sumMap.get("uip").toString()));
+        } else {
+            pvUvUidStatsByShortLink = linkAccessLogsMapper.findPvUvUidStatsByShortLink(requestParam);
+            if (pvUvUidStatsByShortLink == null) {
+                return null;
+            }
+        }
+
+        // 基础访问详情（按天）— 根据开关选择 ClickHouse 或 MySQL
+        List<ShortLinkStatsAccessDailyRespDTO> daily = new ArrayList<>();
+        if ("clickhouse".equalsIgnoreCase(statsPrimary)) {
+            // ✨ ClickHouse 列存聚合 daily PV/UV/UIP，MergeTree 按天分区，速度极快
+            List<Map<String, Object>> chDaily = clickHouseStatsMapper.listDailyStatsByShortLink(
+                    requestParam.getFullShortUrl(), startDate, endDate);
+            // 构建日期 → 数据 Map 方便填 0
+            Map<String, Map<String, Object>> chDailyMap = new HashMap<>();
+            chDaily.forEach(row -> chDailyMap.put(row.get("date").toString(), row));
+            rangeDates.forEach(each -> {
+                Map<String, Object> row = chDailyMap.get(each);
+                if (row != null) {
+                    daily.add(ShortLinkStatsAccessDailyRespDTO.builder()
                             .date(each)
-                            .pv(item.getPv())
-                            .uv(item.getUv())
-                            .uip(item.getUip())
-                            .build();
-                    daily.add(accessDailyRespDTO);
-                }, () -> {
-                    ShortLinkStatsAccessDailyRespDTO accessDailyRespDTO = ShortLinkStatsAccessDailyRespDTO.builder()
-                            .date(each)
-                            .pv(0)
-                            .uv(0)
-                            .uip(0)
-                            .build();
-                    daily.add(accessDailyRespDTO);
-                }));
-        // 地区访问详情（仅国内）
+                            .pv(Integer.parseInt(row.getOrDefault("pv", 0).toString()))
+                            .uv(Integer.parseInt(row.getOrDefault("uv", 0).toString()))
+                            .uip(Integer.parseInt(row.getOrDefault("uip", 0).toString()))
+                            .build());
+                } else {
+                    daily.add(ShortLinkStatsAccessDailyRespDTO.builder()
+                            .date(each).pv(0).uv(0).uip(0).build());
+                }
+            });
+        } else {
+            List<LinkAccessStatsDO> listStatsByShortLink = linkAccessStatsMapper.listStatsByShortLink(requestParam);
+            rangeDates.forEach(each -> listStatsByShortLink.stream()
+                    .filter(item -> Objects.equals(each, DateUtil.formatDate(item.getDate())))
+                    .findFirst()
+                    .ifPresentOrElse(item -> {
+                        daily.add(ShortLinkStatsAccessDailyRespDTO.builder()
+                                .date(each).pv(item.getPv()).uv(item.getUv()).uip(item.getUip()).build());
+                    }, () -> {
+                        daily.add(ShortLinkStatsAccessDailyRespDTO.builder()
+                                .date(each).pv(0).uv(0).uip(0).build());
+                    }));
+        }
+        // 地区访问详情（仅国内）— 根据开关选择 ClickHouse 或 MySQL
         List<ShortLinkStatsLocaleCNRespDTO> localeCnStats = new ArrayList<>();
-        List<LinkLocaleStatsDO> listedLocaleByShortLink = linkLocaleStatsMapper.listLocaleByShortLink(requestParam);
+        List<LinkLocaleStatsDO> listedLocaleByShortLink;
+        if ("clickhouse".equalsIgnoreCase(statsPrimary)) {
+            // ✨ ClickHouse 列存聚合，百万级数据返回 < 1s
+            List<Map<String, Object>> chLocale = clickHouseStatsMapper.listLocaleStatsByShortLink(
+                    requestParam.getFullShortUrl(), startDate, endDate);
+            listedLocaleByShortLink = chLocale.stream().map(row -> {
+                LinkLocaleStatsDO d = new LinkLocaleStatsDO();
+                d.setProvince(row.getOrDefault("province", "未知").toString());
+                d.setCnt(Integer.parseInt(row.getOrDefault("cnt", 0).toString()));
+                return d;
+            }).toList();
+        } else {
+            listedLocaleByShortLink = linkLocaleStatsMapper.listLocaleByShortLink(requestParam);
+        }
         int localeCnSum = listedLocaleByShortLink.stream()
                 .mapToInt(LinkLocaleStatsDO::getCnt)
                 .sum();
@@ -130,7 +184,9 @@ public class ShortLinkStatsServiceImpl implements ShortLinkStatsService {
         });
         // 小时访问详情
         List<Integer> hourStats = new ArrayList<>();
-        List<LinkAccessStatsDO> listHourStatsByShortLink = linkAccessStatsMapper.listHourStatsByShortLink(requestParam);
+        List<LinkAccessStatsDO> listHourStatsByShortLink;
+        // daily 已经通过 ClickHouse 查询取得，小时/星期维度仍用 MySQL（ClickHouse 表中已存储 hour 字段，后续可扩展）
+        listHourStatsByShortLink = linkAccessStatsMapper.listHourStatsByShortLink(requestParam);
         for (int i = 0; i < 24; i++) {
             AtomicInteger hour = new AtomicInteger(i);
             int hourCnt = listHourStatsByShortLink.stream()

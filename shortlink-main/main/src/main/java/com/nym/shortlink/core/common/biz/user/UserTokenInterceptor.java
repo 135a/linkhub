@@ -25,7 +25,14 @@ public class UserTokenInterceptor implements HandlerInterceptor {
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
         String username = request.getHeader(HEADER_USERNAME);
+        if (!StringUtils.hasText(username)) {
+            username = request.getParameter(HEADER_USERNAME);
+        }
+        
         String token = request.getHeader(HEADER_TOKEN);
+        if (!StringUtils.hasText(token)) {
+            token = request.getParameter(HEADER_TOKEN);
+        }
 
         if (StringUtils.hasText(username) && StringUtils.hasText(token)) {
             Object userInfo = stringRedisTemplate.opsForHash().get(USER_LOGIN_KEY + username, token);
