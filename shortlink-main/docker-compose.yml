@@ -134,8 +134,8 @@ services:
     environment:
       - VITE_API_BASE_URL=${VITE_API_BASE_URL}
     container_name: shortlink-frontend
-    ports:
-      - "80:80"
+    # ports:
+    #   - "3000:3000"  # 外部端口已关闭，由总网关代理
     depends_on:
       project:
         condition: service_started
@@ -149,19 +149,22 @@ services:
           memory: 256m
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/healthz"]
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/"]
       interval: 15s
       timeout: 5s
       retries: 10
       start_period: 20s
+
   clickhouse:
-    image: clickhouse/clickhouse-server:24.3
+
+    build:
+      context: ./clickhouse
+      dockerfile: Dockerfile
     container_name: shortlink-clickhouse
     ports:
       - "8123:8123"
     volumes:
       - clickhouse-data:/var/lib/clickhouse
-      - ./clickhouse/init:/docker-entrypoint-initdb.d
     environment:
       - CLICKHOUSE_USER=${CLICKHOUSE_USER:-admin}
       - CLICKHOUSE_PASSWORD=${CLICKHOUSE_PASSWORD:-admin}
