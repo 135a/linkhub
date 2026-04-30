@@ -8,7 +8,7 @@
             <a class="link-span hidden-mobile"
               style="text-decoration: none"
               target="_blank"
-              href="https://shortlink.nym.asia"
+              href="https://example.com"
               >项目首页</a
             >
             <a
