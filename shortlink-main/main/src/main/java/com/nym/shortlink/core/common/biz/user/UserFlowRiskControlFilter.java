@@ -40,6 +40,21 @@ public class UserFlowRiskControlFilter implements Filter {
 
     private static final String USER_FLOW_RISK_CONTROL_LUA_SCRIPT_PATH = "lua/user_flow_risk_control.lua";
 
+    /**
+     * 性能优化：将 Lua 脚本对象提升为静态常量，类加载时初始化一次。
+     * 原实现每次请求都 new DefaultRedisScript + ResourceScriptSource，
+     * 导致每次请求重新读取 classpath 文件并解析脚本，是隐藏的 I/O 瓶颈。
+     */
+    private static final DefaultRedisScript<Long> FLOW_LIMIT_SCRIPT;
+    static {
+        FLOW_LIMIT_SCRIPT = new DefaultRedisScript<>();
+        FLOW_LIMIT_SCRIPT.setScriptSource(new ResourceScriptSource(new ClassPathResource(USER_FLOW_RISK_CONTROL_LUA_SCRIPT_PATH)));
+        FLOW_LIMIT_SCRIPT.setResultType(Long.class);
+    }
+
+    // AntPathMatcher 是线程安全的无状态对象，静态复用避免每次请求 new
+    private static final AntPathMatcher ANT_PATH_MATCHER = new AntPathMatcher();
+
     @SneakyThrows
     @Override
     public void doFilter(ServletRequest request, ServletResponse response, FilterChain filterChain) throws IOException, ServletException {
@@ -48,17 +63,13 @@ public class UserFlowRiskControlFilter implements Filter {
         String exclusions = userFlowRiskControlConfiguration.getExclusions();
         if (StringUtils.hasText(exclusions)) {
             String[] exclusionArray = exclusions.split(",");
-            AntPathMatcher antPathMatcher = new AntPathMatcher();
             for (String exclusion : exclusionArray) {
-                if (antPathMatcher.match(exclusion, requestURI)) {
+                if (ANT_PATH_MATCHER.match(exclusion, requestURI)) {
                     filterChain.doFilter(request, response);
                     return;
                 }
             }
         }
-        DefaultRedisScript<Long> redisScript = new DefaultRedisScript<>();
-        redisScript.setScriptSource(new ResourceScriptSource(new ClassPathResource(USER_FLOW_RISK_CONTROL_LUA_SCRIPT_PATH)));
-        redisScript.setResultType(Long.class);
         String username = Optional.ofNullable(UserContext.getUsername())
                 .orElse(((jakarta.servlet.http.HttpServletRequest) request).getHeader("username"));
         if (!StringUtils.hasText(username)) {
@@ -66,7 +77,7 @@ public class UserFlowRiskControlFilter implements Filter {
         }
         Long result;
         try {
-            result = stringRedisTemplate.execute(redisScript, Lists.newArrayList(username), userFlowRiskControlConfiguration.getTimeWindow());
+            result = stringRedisTemplate.execute(FLOW_LIMIT_SCRIPT, Lists.newArrayList(username), userFlowRiskControlConfiguration.getTimeWindow());
         } catch (Throwable ex) {
             log.error("执行用户请求流量限制LUA脚本出错", ex);
             returnJson((HttpServletResponse) response, JSON.toJSONString(Results.failure(new ClientException(FLOW_LIMIT_ERROR))));

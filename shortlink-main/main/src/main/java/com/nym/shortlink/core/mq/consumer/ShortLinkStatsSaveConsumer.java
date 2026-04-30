@@ -23,6 +23,7 @@ import org.redisson.api.RLock;
 import org.redisson.api.RReadWriteLock;
 import org.redisson.api.RedissonClient;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
 import java.util.Date;
@@ -31,6 +32,8 @@ import java.util.Map;
 import java.util.Optional;
 
 import static com.nym.shortlink.core.common.constant.RedisKeyConstant.LOCK_GID_UPDATE_KEY;
+import static com.nym.shortlink.core.common.constant.RedisKeyConstant.SHORT_LINK_STATS_UIP_KEY;
+import static com.nym.shortlink.core.common.constant.RedisKeyConstant.SHORT_LINK_STATS_UV_KEY;
 import static com.nym.shortlink.core.common.constant.ShortLinkConstant.AMAP_REMOTE_URL;
 
 /**
@@ -48,6 +51,7 @@ public class ShortLinkStatsSaveConsumer implements RocketMQListener<Map<String, 
     private final ShortLinkMapper shortLinkMapper;
     private final ShortLinkGotoMapper shortLinkGotoMapper;
     private final RedissonClient redissonClient;
+    private final StringRedisTemplate stringRedisTemplate;
     private final LinkAccessStatsMapper linkAccessStatsMapper;
     private final LinkLocaleStatsMapper linkLocaleStatsMapper;
     private final LinkOsStatsMapper linkOsStatsMapper;
@@ -98,13 +102,32 @@ public class ShortLinkStatsSaveConsumer implements RocketMQListener<Map<String, 
         RLock rLock = readWriteLock.readLock();
         rLock.lock();
         try {
+            // 此处进行真正的 UV/UIP 首次访问判断（已从主链路移出，避免阀塞 Tomcat 线程）
+            boolean uvFirstFlag;
+            if (statsRecord.getUvFirstFlag()) {
+                // 主链路判断为新 Cookie（必定是新 UV），直接写入 Set
+                stringRedisTemplate.opsForSet().add(SHORT_LINK_STATS_UV_KEY + fullShortUrl, statsRecord.getUv());
+                uvFirstFlag = true;
+            } else {
+                // 旧 Cookie，判断该 uv 值是否已在 Set
+                Long uvAdded = stringRedisTemplate.opsForSet().add(SHORT_LINK_STATS_UV_KEY + fullShortUrl, statsRecord.getUv());
+                uvFirstFlag = uvAdded != null && uvAdded > 0L;
+            }
+            // UIP 判断：由 Consumer 做，主链路不再内联
+            Long uipAdded = stringRedisTemplate.opsForSet().add(SHORT_LINK_STATS_UIP_KEY + fullShortUrl, statsRecord.getRemoteAddr());
+            boolean uipFirstFlag = uipAdded != null && uipAdded > 0L;
+            // 用实际判断结果覆盖 DTO中的 placeholder
+            statsRecord = statsRecord.toBuilder()
+                    .uvFirstFlag(uvFirstFlag)
+                    .uipFirstFlag(uipFirstFlag)
+                    .build();
             if (StrUtil.isBlank(gid)) {
                 LambdaQueryWrapper<ShortLinkGotoDO> queryWrapper = Wrappers.lambdaQuery(ShortLinkGotoDO.class)
                         .eq(ShortLinkGotoDO::getFullShortUrl, fullShortUrl);
                 ShortLinkGotoDO shortLinkGotoDO = shortLinkGotoMapper.selectOne(queryWrapper);
                 gid = shortLinkGotoDO.getGid();
             }
-            // 解析高德 IP 地理位置
+            // 解析高德 IP 地理位置（设置 2s 超时，避免外部 API 慢响应阻塞 Consumer 线程）
             Map<String, Object> localeParamMap = new HashMap<>();
             localeParamMap.put("key", statsLocaleAmapKey);
             localeParamMap.put("ip", statsRecord.getRemoteAddr());
@@ -112,7 +135,7 @@ public class ShortLinkStatsSaveConsumer implements RocketMQListener<Map<String, 
             String actualCity = "未知";
             String actualAdcode = "未知";
             try {
-                String localeResultStr = HttpUtil.get(AMAP_REMOTE_URL, localeParamMap);
+                String localeResultStr = HttpUtil.get(AMAP_REMOTE_URL, localeParamMap, 2000);
                 JSONObject localeResultObj = JSON.parseObject(localeResultStr);
                 String infoCode = localeResultObj.getString("infocode");
                 if (StrUtil.isNotBlank(infoCode) && StrUtil.equals(infoCode, "10000")) {
@@ -123,7 +146,7 @@ public class ShortLinkStatsSaveConsumer implements RocketMQListener<Map<String, 
                     actualAdcode = unknownFlag ? "未知" : localeResultObj.getString("adcode");
                 }
             } catch (Exception ex) {
-                log.error("调用高德地图解析地理位置异常", ex);
+                log.warn("调用高德地图解析地理位置超时或异常，降级为未知地区: {}", ex.getMessage());
             }
 
             // 根据降级开关选择写入目标

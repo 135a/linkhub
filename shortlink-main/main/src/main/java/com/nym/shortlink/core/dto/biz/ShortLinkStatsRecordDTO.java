@@ -11,7 +11,7 @@ import java.util.Date;
  * 短链接统计实体
  */
 @Data
-@Builder
+@Builder(toBuilder = true)
 @NoArgsConstructor
 @AllArgsConstructor
 public class ShortLinkStatsRecordDTO {

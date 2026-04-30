@@ -42,9 +42,7 @@ public class ShortLinkController {
     /**
      * 创建短链接
      */
-    @RateLimit(resource = "create_short-link", qps = 1,
-            controlBehavior = RuleConstant.CONTROL_BEHAVIOR_RATE_LIMITER, maxQueueingTimeMs = 2000,
-            message = "创建请求过于频繁，请稍后再试")
+    @RateLimit(resource = "create_short-link", qps = 1, controlBehavior = RuleConstant.CONTROL_BEHAVIOR_RATE_LIMITER, maxQueueingTimeMs = 2000, message = "创建请求过于频繁，请稍后再试")
     @PostMapping("/api/short-link/admin/v1/create")
     public Result<ShortLinkCreateRespDTO> createShortLink(@RequestBody ShortLinkCreateReqDTO requestParam) {
         Result<ShortLinkCreateRespDTO> result = Results.success(shortLinkService.createShortLink(requestParam));
@@ -54,12 +52,11 @@ public class ShortLinkController {
     /**
      * 批量创建短链接
      */
-    @RateLimit(resource = "batch-create_short-link", qps = 1,
-            controlBehavior = RuleConstant.CONTROL_BEHAVIOR_RATE_LIMITER, maxQueueingTimeMs = 5000,
-            message = "批量创建请求过于频繁，请稍后再试")
+    @RateLimit(resource = "batch-create_short-link", qps = 1, controlBehavior = RuleConstant.CONTROL_BEHAVIOR_RATE_LIMITER, maxQueueingTimeMs = 5000, message = "批量创建请求过于频繁，请稍后再试")
     @SneakyThrows
     @PostMapping("/api/short-link/admin/v1/create/batch")
-    public void batchCreateShortLink(@RequestBody ShortLinkBatchCreateReqDTO requestParam, HttpServletResponse response) {
+    public void batchCreateShortLink(@RequestBody ShortLinkBatchCreateReqDTO requestParam,
+            HttpServletResponse response) {
         ShortLinkBatchCreateRespDTO shortLinkBatchCreateRespDTO = shortLinkService.batchCreateShortLink(requestParam);
         if (shortLinkBatchCreateRespDTO != null) {
             List<ShortLinkBaseInfoRespDTO> baseLinkInfos = shortLinkBatchCreateRespDTO.getBaseLinkInfos();
@@ -83,18 +80,19 @@ public class ShortLinkController {
     @RateLimit(resource = "page_short-link", qps = 20)
     @GetMapping("/api/short-link/admin/v1/page")
     public Result<Page<ShortLinkPageRespDTO>> pageShortLink(ShortLinkPageReqDTO requestParam) {
-        Result<Page<ShortLinkPageRespDTO>> result = Results.success((Page<ShortLinkPageRespDTO>) shortLinkService.pageShortLink(requestParam));
+        Result<Page<ShortLinkPageRespDTO>> result = Results
+                .success((Page<ShortLinkPageRespDTO>) shortLinkService.pageShortLink(requestParam));
         return result;
     }
 
     /**
      * 短链接跳转
      */
-    @RateLimit(resource = "redirect_short-link", qps = 100)
+    @RateLimit(resource = "redirect_short-link", qps = 5000)
     @SneakyThrows
     @GetMapping("/{shortUri}")
-    public void restoreUrl(@PathVariable("shortUri") String shortUri, HttpServletRequest request, HttpServletResponse response) {
-        log.info("收到短链接跳转请求, shortUri: {}", shortUri);
+    public void restoreUrl(@PathVariable("shortUri") String shortUri, HttpServletRequest request,
+            HttpServletResponse response) {
         shortLinkService.restoreUrl(shortUri, request, response);
     }
 }

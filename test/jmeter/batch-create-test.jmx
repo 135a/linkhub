@@ -13,7 +13,7 @@
           </elementProp>
           <elementProp name="port" elementType="Argument">
             <stringProp name="Argument.name">port</stringProp>
-            <stringProp name="Argument.value">80</stringProp>
+            <stringProp name="Argument.value">8001</stringProp>
             <stringProp name="Argument.metadata">=</stringProp>
           </elementProp>
           <elementProp name="username" elementType="Argument">
@@ -79,14 +79,14 @@
           </HeaderManager>
           <hashTree/>
           <!-- 从登录响应中提取 Token，存入全局变量 authToken -->
-          <JSONPathExtractor guiclass="JSONPathExtractorGui" testclass="JSONPathExtractor" testname="Extract Token">
-            <stringProp name="JSONPathExtractor.referenceNames">authToken</stringProp>
-            <stringProp name="JSONPathExtractor.jsonPathExprs">$.data.token</stringProp>
-            <stringProp name="JSONPathExtractor.defaultValues">TOKEN_NOT_FOUND</stringProp>
-            <stringProp name="JSONPathExtractor.match_no">0</stringProp>
-            <boolProp name="JSONPathExtractor.compute_concat">false</boolProp>
+          <JSONPostProcessor guiclass="JSONPostProcessorGui" testclass="JSONPostProcessor" testname="Extract Token">
+            <stringProp name="JSONPostProcessor.referenceNames">authToken</stringProp>
+            <stringProp name="JSONPostProcessor.jsonPathExprs">$.data.token</stringProp>
+            <stringProp name="JSONPostProcessor.defaultValues">TOKEN_NOT_FOUND</stringProp>
+            <stringProp name="JSONPostProcessor.match_numbers">0</stringProp>
+            <boolProp name="JSONPostProcessor.compute_concat">false</boolProp>
             <stringProp name="Sample.scope">main</stringProp>
-          </JSONPathExtractor>
+          </JSONPostProcessor>
           <hashTree/>
           <!-- 将 Token 写入 JMeter 属性，使跨线程组共享 -->
           <BeanShellPostProcessor guiclass="TestBeanGUI" testclass="BeanShellPostProcessor" testname="Save Token to Property">

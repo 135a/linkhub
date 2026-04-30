@@ -26,12 +26,18 @@ public class CacheMonitoringServiceImpl implements CacheMonitoringService {
     @Autowired
     private StringRedisTemplate stringRedisTemplate;
 
-    private static final ExecutorService MONITOR_EXECUTOR = Executors.newFixedThreadPool(2, r -> {
-        Thread thread = new Thread(r);
-        thread.setName("cache-monitor-" + thread.getId());
-        thread.setDaemon(true);
-        return thread;
-    });
+    private static final ExecutorService MONITOR_EXECUTOR = new java.util.concurrent.ThreadPoolExecutor(
+            2, 2,
+            0L, TimeUnit.MILLISECONDS,
+            new java.util.concurrent.ArrayBlockingQueue<>(1000),
+            r -> {
+                Thread thread = new Thread(r);
+                thread.setName("cache-monitor-" + thread.getId());
+                thread.setDaemon(true);
+                return thread;
+            },
+            new java.util.concurrent.ThreadPoolExecutor.DiscardPolicy()
+    );
 
     private static final String CACHE_L1_HIT_KEY = "short-link:stats:cache:l1hit:daily:";
 
