@@ -4,7 +4,7 @@
 
 - 环境：preprod（与生产同镜像标签）
 - 架构：单体仓库 + 前后端分离部署（`frontend` / `backend(project)` / `nginx`）
-- 入口域名：`shortlink.nym.asia`（预发布等价域名）
+- 入口域名：`example.com`（预发布等价域名）
 - 演练时间：2026-04-26
 
 ## 演练步骤

@@ -15,7 +15,7 @@
 
 ## 请求链路
 
-1. 浏览器访问 `shortlink.nym.asia`
+1. 浏览器访问 `example.com`
 2. Nginx 返回前端静态资源
 3. 前端调用 `/api/...`
 4. Nginx 直接转发到 `project:8001`

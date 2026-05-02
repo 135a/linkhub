@@ -16,7 +16,7 @@
 2. 构建并启动容器：
    - `docker compose up -d --build`
 3. 访问：
-   - 前端：`http://localhost`（生产域名为 `https://shortlink.nym.asia`）
+   - 前端：`http://localhost`（生产域名为 `https://example.com`）
    - API：`http://localhost/api/...`（经 Nginx 转发至 `project`）
 
 ## 质量与治理

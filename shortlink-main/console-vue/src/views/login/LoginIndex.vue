@@ -276,10 +276,10 @@ const isLogin = ref(true)
 const moveRef = ref() // 左右移动的切换按钮模块
 const changeLogin = () => {
   let domain = window.location.host
-  if (domain === 'shortlink.nym.asia') {
+
     ElMessage.warning('演示环境暂不支持注册')
     return
-  }
+
   isLogin.value = !isLogin.value
   if (isLogin.value) {
     moveRef.value.style.transform = 'translate(0, 0)'

@@ -6,7 +6,7 @@
 
 关键项：
 
-- `DOMAIN=shortlink.nym.asia`
+- `DOMAIN=example.com`
 - `VITE_API_BASE_URL=/api/short-link/v1`
 - `SPRING_PROFILES_ACTIVE=dev`
 
@@ -27,7 +27,7 @@
 ## 生产部署
 
 1. 更新镜像标签并拉起新版本
-2. 验证 `shortlink.nym.asia` 首页、登录、短链关键接口
+2. 验证 `example.com` 首页、登录、短链关键接口
 3. 观察 30 分钟核心指标后再确认切流完成
 
 ## 回滚策略
