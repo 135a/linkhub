@@ -42,7 +42,7 @@ public class ShortLinkController {
     /**
      * 创建短链接
      */
-    @RateLimit(resource = "create_short-link", qps = 1, controlBehavior = RuleConstant.CONTROL_BEHAVIOR_RATE_LIMITER, maxQueueingTimeMs = 2000, message = "创建请求过于频繁，请稍后再试")
+    @RateLimit(resource = "create_short-link", qps = 200, controlBehavior = RuleConstant.CONTROL_BEHAVIOR_RATE_LIMITER, maxQueueingTimeMs = 2000, message = "创建请求过于频繁，请稍后再试")
     @PostMapping("/api/short-link/admin/v1/create")
     public Result<ShortLinkCreateRespDTO> createShortLink(@RequestBody ShortLinkCreateReqDTO requestParam) {
         Result<ShortLinkCreateRespDTO> result = Results.success(shortLinkService.createShortLink(requestParam));
@@ -50,9 +50,18 @@ public class ShortLinkController {
     }
 
     /**
+     * 创建短链接（分布式锁版本）
+     */
+    @RateLimit(resource = "create-by-lock_short-link", qps = 100, controlBehavior = RuleConstant.CONTROL_BEHAVIOR_RATE_LIMITER, maxQueueingTimeMs = 2000, message = "创建请求过于频繁，请稍后再试")
+    @PostMapping("/api/short-link/admin/v1/create/by-lock")
+    public Result<ShortLinkCreateRespDTO> createShortLinkByLock(@RequestBody ShortLinkCreateReqDTO requestParam) {
+        return Results.success(shortLinkService.createShortLinkByLock(requestParam));
+    }
+
+    /**
      * 批量创建短链接
      */
-    @RateLimit(resource = "batch-create_short-link", qps = 1, controlBehavior = RuleConstant.CONTROL_BEHAVIOR_RATE_LIMITER, maxQueueingTimeMs = 5000, message = "批量创建请求过于频繁，请稍后再试")
+    @RateLimit(resource = "batch-create_short-link", qps = 100, controlBehavior = RuleConstant.CONTROL_BEHAVIOR_RATE_LIMITER, maxQueueingTimeMs = 5000, message = "批量创建请求过于频繁，请稍后再试")
     @SneakyThrows
     @PostMapping("/api/short-link/admin/v1/create/batch")
     public void batchCreateShortLink(@RequestBody ShortLinkBatchCreateReqDTO requestParam,
