@@ -92,8 +92,9 @@ public class UserFlowRiskControlFilter implements Filter {
     }
 
     private void returnJson(HttpServletResponse response, String json) throws Exception {
+        response.setStatus(429);
         response.setCharacterEncoding("UTF-8");
-        response.setContentType("text/html; charset=utf-8");
+        response.setContentType("application/json; charset=utf-8");
         try (PrintWriter writer = response.getWriter()) {
             writer.print(json);
         }

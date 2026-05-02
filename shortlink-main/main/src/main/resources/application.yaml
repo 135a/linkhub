@@ -54,7 +54,7 @@ short-link:
   flow-limit:
     enable: true
     time-window: 1
-    max-access-count: 1000
+    max-access-count: 50000
     # 性能优化：将跳转接口排除在用户流控之外
     # 跳转路径格式为 /{shortUri}（单段根路径），用 /* 精确匹配
     # /* 只匹配根目录单段路径（/abc123），不会匹配 /api/... 等多级路径

@@ -137,7 +137,7 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
                 .totalUip(0)
                 .delTime(0L)
                 .fullShortUrl(fullShortUrl)
-                .favicon(getFavicon(requestParam.getOriginUrl()))
+                .favicon(null)   // 先置 null，favicon 异步获取后更新
                 .build();
         ShortLinkGotoDO linkGotoDO = ShortLinkGotoDO.builder()
                 .fullShortUrl(fullShortUrl)
@@ -158,6 +158,19 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
                 requestParam.getOriginUrl(),
                 LinkUtil.getLinkCacheValidTime(requestParam.getValidDate()), TimeUnit.MILLISECONDS);
         shortUriCreateCachePenetrationBloomFilter.add(fullShortUrl);
+        // 异步回填 favicon，不阻塞创建主流程
+        final String originUrlForFavicon = requestParam.getOriginUrl();
+        final String finalFullShortUrl = fullShortUrl;
+        STATS_EXECUTOR.submit(() -> {
+            String favicon = getFavicon(originUrlForFavicon);
+            if (favicon != null) {
+                baseMapper.update(null,
+                        com.baomidou.mybatisplus.core.toolkit.Wrappers.<ShortLinkDO>lambdaUpdate()
+                                .eq(ShortLinkDO::getFullShortUrl, finalFullShortUrl)
+                                .eq(ShortLinkDO::getDelFlag, 0)
+                                .set(ShortLinkDO::getFavicon, favicon));
+            }
+        });
         return ShortLinkCreateRespDTO.builder()
                 .fullShortUrl("http://" + shortLinkDO.getFullShortUrl())
                 .originUrl(requestParam.getOriginUrl())
@@ -170,7 +183,17 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
         // verificationWhitelist(requestParam.getOriginUrl());
         String fullShortUrl;
         RLock lock = redissonClient.getLock(SHORT_LINK_CREATE_LOCK_KEY);
-        lock.lock();
+        boolean lockAcquired;
+        try {
+            // 最多等待 5s 获取锁，持锁最长 10s（防止持锁线程崩溃导致锁永久卡死）
+            lockAcquired = lock.tryLock(5, 10, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new ServiceException("获取分布式锁被中断，请重试");
+        }
+        if (!lockAcquired) {
+            throw new ClientException("系统繁忙，短链接创建排队超时，请稍后重试");
+        }
         try {
             String domain = StrUtil.isNotBlank(requestParam.getDomain()) ? requestParam.getDomain()
                     : createShortLinkDefaultDomain;
@@ -194,7 +217,7 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
                     .totalUip(0)
                     .delTime(0L)
                     .fullShortUrl(fullShortUrl)
-                    .favicon(getFavicon(requestParam.getOriginUrl()))
+                    .favicon(null)   // 先置 null，favicon 异步获取后更新
                     .build();
             ShortLinkGotoDO linkGotoDO = ShortLinkGotoDO.builder()
                     .fullShortUrl(fullShortUrl)
@@ -621,19 +644,27 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
         return shorUri;
     }
 
-    @SneakyThrows
     private String getFavicon(String url) {
-        URL targetUrl = new URL(url);
-        HttpURLConnection connection = (HttpURLConnection) targetUrl.openConnection();
-        connection.setRequestMethod("GET");
-        connection.connect();
-        int responseCode = connection.getResponseCode();
-        if (HttpURLConnection.HTTP_OK == responseCode) {
-            Document document = Jsoup.connect(url).get();
-            Element faviconLink = document.select("link[rel~=(?i)^(shortcut )?icon]").first();
-            if (faviconLink != null) {
-                return faviconLink.attr("abs:href");
+        try {
+            URL targetUrl = new URL(url);
+            HttpURLConnection connection = (HttpURLConnection) targetUrl.openConnection();
+            connection.setRequestMethod("GET");
+            connection.setConnectTimeout(2000);  // 连接超时 2s
+            connection.setReadTimeout(2000);     // 读取超时 2s
+            connection.connect();
+            int responseCode = connection.getResponseCode();
+            if (HttpURLConnection.HTTP_OK == responseCode) {
+                Document document = Jsoup.connect(url)
+                        .timeout(2000)           // Jsoup 也加超时 2s
+                        .get();
+                Element faviconLink = document.select("link[rel~=(?i)^(shortcut )?icon]").first();
+                if (faviconLink != null) {
+                    return faviconLink.attr("abs:href");
+                }
             }
+        } catch (Exception e) {
+            // favicon 获取失败不影响短链接创建，静默降级返回 null
+            log.warn("[getFavicon] 获取 favicon 失败，url={}, reason={}", url, e.getMessage());
         }
         return null;
     }
