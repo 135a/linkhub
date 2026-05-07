@@ -199,15 +199,9 @@ public class ShortLinkStatsSaveConsumer implements RocketMQListener<Map<String, 
         clickHouseStatsMapper.insertStatsTodayStats(fullShortUrl, dateStr,
                 1, statsRecord.getUvFirstFlag() ? 1 : 0, statsRecord.getUipFirstFlag() ? 1 : 0);
         // 同步更新主表 PV/UV/UIP 汇总字段（仍写 MySQL）
-        RReadWriteLock readWriteLock = redissonClient.getReadWriteLock(String.format(LOCK_GID_UPDATE_KEY, fullShortUrl));
-        RLock rLock = readWriteLock.readLock();
-        rLock.lock();
-        try {
-            shortLinkMapper.incrementStats(gid, fullShortUrl,
-                    1, statsRecord.getUvFirstFlag() ? 1 : 0, statsRecord.getUipFirstFlag() ? 1 : 0);
-        } finally {
-            if (rLock.isHeldByCurrentThread()) rLock.unlock();
-        }
+        // 注意：外层 actualSaveShortLinkStats 已持有 readLock，此处直接调用，不重复加锁（Redisson readLock 不可重入，嵌套加锁会死锁）
+        shortLinkMapper.incrementStats(gid, fullShortUrl,
+                1, statsRecord.getUvFirstFlag() ? 1 : 0, statsRecord.getUipFirstFlag() ? 1 : 0);
     }
 
     /**

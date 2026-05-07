@@ -595,13 +595,6 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
     @Override
     public void shortLinkStats(ShortLinkStatsRecordDTO statsRecord) {
         String fullShortUrl = statsRecord.getFullShortUrl();
-        // 异步线程里判断 UV/UIP
-        Long uvAdded = stringRedisTemplate.opsForSet().add(SHORT_LINK_STATS_UV_KEY + fullShortUrl, statsRecord.getUv());
-        statsRecord.setUvFirstFlag(uvAdded != null && uvAdded > 0L);
-
-        Long uipAdded = stringRedisTemplate.opsForSet().add(SHORT_LINK_STATS_UIP_KEY + fullShortUrl, statsRecord.getRemoteAddr());
-        statsRecord.setUipFirstFlag(uipAdded != null && uipAdded > 0L);
-
         Map<String, String> producerMap = new HashMap<>();
         producerMap.put("fullShortUrl", fullShortUrl);
         producerMap.put("keys", statsRecord.getKeys());
