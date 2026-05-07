@@ -192,8 +192,9 @@ services:
       args:
         VITE_API_BASE_URL: ${VITE_API_BASE_URL}
     container_name: shortlink-nginx
-    ports:
-      - "80:80"
+    # ports:
+    #   - "80:80"  # 端口冲突：宿主机 80 已被 nginx-gateway 占用，此处关闭，由总网关代理
+
     env_file:
       - .env
     environment:
