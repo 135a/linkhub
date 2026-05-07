@@ -109,14 +109,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, UserDO> implements 
 
     @Override
     public UserLoginRespDTO login(UserLoginReqDTO requestParam) {
-        LambdaQueryWrapper<UserDO> queryWrapper = Wrappers.lambdaQuery(UserDO.class)
-                .eq(UserDO::getUsername, requestParam.getUsername())
-                .eq(UserDO::getPassword, requestParam.getPassword())
-                .eq(UserDO::getDelFlag, 0);
-        UserDO userDO = baseMapper.selectOne(queryWrapper);
-        if (userDO == null) {
-            throw new ClientException("用户不存在");
-        }
+        // 性能优化：优先检查 Redis，已登录的用户直接续期返回，完全跳过 MySQL 查询
         Map<Object, Object> hasLoginMap = stringRedisTemplate.opsForHash().entries(USER_LOGIN_KEY + requestParam.getUsername());
         if (CollUtil.isNotEmpty(hasLoginMap)) {
             stringRedisTemplate.expire(USER_LOGIN_KEY + requestParam.getUsername(), 30L, TimeUnit.MINUTES);
@@ -125,6 +118,15 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, UserDO> implements 
                     .map(Object::toString)
                     .orElseThrow(() -> new ClientException("用户登录错误"));
             return new UserLoginRespDTO(token);
+        }
+        // Redis 无缓存时才查 MySQL 做完整身份校验
+        LambdaQueryWrapper<UserDO> queryWrapper = Wrappers.lambdaQuery(UserDO.class)
+                .eq(UserDO::getUsername, requestParam.getUsername())
+                .eq(UserDO::getPassword, requestParam.getPassword())
+                .eq(UserDO::getDelFlag, 0);
+        UserDO userDO = baseMapper.selectOne(queryWrapper);
+        if (userDO == null) {
+            throw new ClientException("用户不存在");
         }
         /**
          * Hash

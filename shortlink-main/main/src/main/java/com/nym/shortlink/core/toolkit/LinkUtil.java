@@ -51,7 +51,51 @@ public class LinkUtil {
         if (ipAddress == null || ipAddress.isEmpty() || "unknown".equalsIgnoreCase(ipAddress)) {
             ipAddress = request.getRemoteAddr();
         }
+        // 多层 Docker 代理时，X-Forwarded-For 为 "真实IP, 网关IP1, 网关IP2" 逗号列表
+        // 内层 Nginx 的 X-Real-IP: $remote_addr 会被覆写为内网网关 IP，不可信
+        // 策略：遍历列表，跳过私有/保留网段，取第一个公网 IP；若全为内网则取最前一个兜底
+        if (ipAddress != null && ipAddress.contains(",")) {
+            String[] ips = ipAddress.split(",");
+            String fallback = ips[0].trim();
+            for (String ip : ips) {
+                String candidate = ip.trim();
+                if (!isPrivateIp(candidate)) {
+                    return candidate;
+                }
+            }
+            return fallback;
+        }
         return ipAddress;
+    }
+
+    /**
+     * 判断是否为私有/保留 IP 段（Docker 内网、局域网、回环等）
+     */
+    private static boolean isPrivateIp(String ip) {
+        if (ip == null || ip.isEmpty())
+            return true;
+        // 回环
+        if (ip.startsWith("127."))
+            return true;
+        // 10.x.x.x
+        if (ip.startsWith("10."))
+            return true;
+        // 172.16.x.x ~ 172.31.x.x（Docker 默认网段 172.17-172.18 在此范围内）
+        if (ip.startsWith("172.")) {
+            try {
+                int second = Integer.parseInt(ip.split("\\.")[1]);
+                if (second >= 16 && second <= 31)
+                    return true;
+            } catch (Exception ignored) {
+            }
+        }
+        // 192.168.x.x
+        if (ip.startsWith("192.168."))
+            return true;
+        // IPv6 回环/本地
+        if ("::1".equals(ip) || ip.startsWith("fe80:"))
+            return true;
+        return false;
     }
 
     /**

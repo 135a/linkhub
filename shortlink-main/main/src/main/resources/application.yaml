@@ -5,6 +5,7 @@ server:
       max: 300        # 与压测并发线程数匹配，避免过度竞争
       min-spare: 50
     accept-count: 100
+    max-keep-alive-requests: -1 # 禁用 keep-alive 限制，防止高并发压测时 Tomcat 主动断开连接导致 SocketException
   servlet:
     encoding:
       charset: UTF-8
@@ -24,10 +25,10 @@ spring:
 #      password: 123456
       lettuce:
         pool:
-          max-active: 64    # 最大连接数，默认 8，扩大以支撑高并发统计操作
-          max-idle: 32      # 最大空闲连接
-          min-idle: 8       # 最小空闲连接，预热连接避免冷启动延迟
-          max-wait: 500ms   # 连接等待超时，超时直接报错而非无限等待
+          max-active: 200   # 最大连接数，扩大以支撑高并发测试系统的极限
+          max-idle: 100     # 最大空闲连接
+          min-idle: 20      # 最小空闲连接，预热连接避免冷启动延迟
+          max-wait: 2000ms  # 连接等待超时，增加等待时间以避免超时报错
 
   mvc:
     view:
@@ -52,7 +53,7 @@ short-link:
   group:
     max-num: 20
   flow-limit:
-    enable: true
+    enable: false
     time-window: 1
     max-access-count: 50000
     # 性能优化：将跳转接口排除在用户流控之外

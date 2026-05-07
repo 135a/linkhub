@@ -69,31 +69,31 @@
 
     <!-- ===================== 聚合查询 SQL ===================== -->
 
-    <!-- 按天查询单链接 PV/UV/UIP（ClickHouse 列存聚合） -->
+    <!-- 按天查询单链接 PV/UV/UIP（从访问日志精确聚合，uniqExact 保证 UV/UIP 准确） -->
     <select id="listDailyStatsByShortLink" resultType="map">
         SELECT
-            formatDateTime(date, '%Y-%m-%d') AS date,
-            SUM(pv)  AS pv,
-            SUM(uv)  AS uv,
-            SUM(uip) AS uip
-        FROM shortlink_stats.link_access_stats
+            formatDateTime(toDate(create_time), '%Y-%m-%d') AS date,
+            COUNT(*)               AS pv,
+            uniqExact(user)       AS uv,
+            uniqExact(ip)         AS uip
+        FROM shortlink_stats.link_access_logs
         WHERE full_short_url = #{fullShortUrl}
-          AND shortlink_stats.link_access_stats.date >= toDate(#{startDate})
-          AND shortlink_stats.link_access_stats.date &lt;= toDate(#{endDate})
-        GROUP BY shortlink_stats.link_access_stats.date
-        ORDER BY shortlink_stats.link_access_stats.date
+          AND toDate(create_time) >= toDate(#{startDate})
+          AND toDate(create_time) &lt;= toDate(#{endDate})
+        GROUP BY toDate(create_time)
+        ORDER BY toDate(create_time)
     </select>
 
-    <!-- 汇总单链接总 PV/UV/UIP -->
+    <!-- 汇总单链接总 PV/UV/UIP - 从访问日志直接算 uniqExact(ip) 保证 UIP 准确 -->
     <select id="sumPvUvUipByShortLink" resultType="map">
         SELECT
-            SUM(pv)  AS pv,
-            SUM(uv)  AS uv,
-            SUM(uip) AS uip
-        FROM shortlink_stats.link_access_stats
+            COUNT(*)                AS pv,
+            uniqExact(user)        AS uv,
+            uniqExact(ip)          AS uip
+        FROM shortlink_stats.link_access_logs
         WHERE full_short_url = #{fullShortUrl}
-          AND date >= toDate(#{startDate})
-          AND date &lt;= toDate(#{endDate})
+          AND toDate(create_time) >= toDate(#{startDate})
+          AND toDate(create_time) &lt;= toDate(#{endDate})
     </select>
 
     <!-- 查询单链接地区分布（省级，降序取前 10） -->

@@ -565,6 +565,13 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
             addResponseCookieTask.run();
         }
         String remoteAddr = LinkUtil.getActualIp(((HttpServletRequest) request));
+        // ===== 临时诊断日志（排查真实IP问题后删除）=====
+        log.warn("[IP-DIAG] remoteAddr={}, X-Forwarded-For={}, X-Real-IP={}, RemoteHost={}",
+                remoteAddr,
+                ((HttpServletRequest) request).getHeader("X-Forwarded-For"),
+                ((HttpServletRequest) request).getHeader("X-Real-IP"),
+                request.getRemoteAddr());
+        // ===== END 诊断日志 =====
         String os = LinkUtil.getOs(((HttpServletRequest) request));
         String browser = LinkUtil.getBrowser(((HttpServletRequest) request));
         String device = LinkUtil.getDevice(((HttpServletRequest) request));

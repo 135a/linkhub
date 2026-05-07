@@ -155,9 +155,14 @@ public class ShortLinkStatsSaveConsumer implements RocketMQListener<Map<String, 
             }
             // 始终双写到 MySQL，保证未迁移到 ClickHouse 的统计维度（如分组统计、浏览器/OS分布）能正常查询
             saveToMySQL(fullShortUrl, gid, statsRecord, actualProvince, actualCity, actualAdcode, !"clickhouse".equalsIgnoreCase(statsPrimary));
-            
+
+            // 主动失效该短链接的 stats 缓存，让下次查询立即拿到最新数据
+            // 用 SCAN 替代 KEYS，避免大 key 扫描阻塞 Redis
+            invalidateStatsCache(fullShortUrl, gid);
+
             // 广播 SSE 事件，通知前端更新数据
             sseEmitterService.broadcastUpdate(gid);
+
         } catch (Throwable ex) {
             log.error("短链接访问量统计异常", ex);
         } finally {
@@ -284,5 +289,49 @@ public class ShortLinkStatsSaveConsumer implements RocketMQListener<Map<String, 
                 .date(new Date())
                 .build();
         linkStatsTodayMapper.shortLinkTodayState(linkStatsTodayDO);
+    }
+
+    /**
+     * 主动失效指定短链接的 stats Redis 缓存
+     * 使用 SCAN 替代 KEYS，避免全量扫描阻塞 Redis
+     */
+    private void invalidateStatsCache(String fullShortUrl, String gid) {
+        try {
+            // 失效单链接统计缓存（key 格式：stats:single:{url}:{start}:{end}）
+            String singlePattern = "stats:single:" + fullShortUrl + ":*";
+            org.springframework.data.redis.core.ScanOptions singleOpts =
+                    org.springframework.data.redis.core.ScanOptions.scanOptions()
+                            .match(singlePattern).count(50).build();
+            stringRedisTemplate.execute((org.springframework.data.redis.core.RedisCallback<Void>) conn -> {
+                try (var cursor = conn.scan(singleOpts)) {
+                    while (cursor.hasNext()) {
+                        conn.del(cursor.next());
+                    }
+                } catch (Exception e) {
+                    log.warn("清除单链接 stats 缓存失败: {}", e.getMessage());
+                }
+                return null;
+            });
+
+            // 失效分组统计缓存（key 格式：stats:group:{gid}:{start}:{end}）
+            if (gid != null) {
+                String groupPattern = "stats:group:" + gid + ":*";
+                org.springframework.data.redis.core.ScanOptions groupOpts =
+                        org.springframework.data.redis.core.ScanOptions.scanOptions()
+                                .match(groupPattern).count(50).build();
+                stringRedisTemplate.execute((org.springframework.data.redis.core.RedisCallback<Void>) conn -> {
+                    try (var cursor = conn.scan(groupOpts)) {
+                        while (cursor.hasNext()) {
+                            conn.del(cursor.next());
+                        }
+                    } catch (Exception e) {
+                        log.warn("清除分组 stats 缓存失败: {}", e.getMessage());
+                    }
+                    return null;
+                });
+            }
+        } catch (Exception e) {
+            log.warn("invalidateStatsCache 异常，忽略: {}", e.getMessage());
+        }
     }
 }

@@ -5,6 +5,9 @@ dataSources:
     jdbcUrl: jdbc:mysql://shortlink-mysql:3306/link?useUnicode=true&characterEncoding=UTF-8&rewriteBatchedStatements=true&allowMultiQueries=true&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
     username: root
     password: root
+    maximumPoolSize: 200
+    minimumIdle: 20
+    connectionTimeout: 30000
 
 rules:
   - !SHARDING
@@ -67,4 +70,4 @@ rules:
         props:
           aes-key-value: d6oadClrrb9A3GWo
 props:
-  sql-show: true
+  sql-show: false

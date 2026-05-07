@@ -42,8 +42,8 @@ public class ClickHouseDataSourceConfig {
         if (password != null && !password.isEmpty()) {
             hikariConfig.setPassword(password);
         }
-        hikariConfig.setMaximumPoolSize(10);
-        hikariConfig.setMinimumIdle(2);
+        hikariConfig.setMaximumPoolSize(100);
+        hikariConfig.setMinimumIdle(10);
         hikariConfig.setConnectionTimeout(30000);
         hikariConfig.setIdleTimeout(600000);
         hikariConfig.setMaxLifetime(1800000);
