@@ -96,6 +96,9 @@ public class RateLimitAspect {
      * @param maxQueueingTimeMs  漏桶模式下最大排队等待时间（毫秒）
      */
     private void registerRuleIfAbsent(String resource, double qps, int controlBehavior, int maxQueueingTimeMs) {
+    // 使用 ConcurrentHashMap 的 putIfAbsent 方法检查资源是否已注册
+    // 如果资源不存在，则注册并返回 null，表示成功添加
+    // 如果资源已存在，则返回现有值，表示无需重复注册
         if (registeredResources.putIfAbsent(resource, Boolean.TRUE) == null) {
             // 获取现有规则列表（避免覆盖其他资源的规则）
             List<FlowRule> existingRules = new ArrayList<>(FlowRuleManager.getRules());

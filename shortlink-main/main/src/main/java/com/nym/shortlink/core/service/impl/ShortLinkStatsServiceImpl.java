@@ -89,8 +89,14 @@ public class ShortLinkStatsServiceImpl implements ShortLinkStatsService {
             new LinkedBlockingQueue<>(500),
             new ThreadPoolExecutor.CallerRunsPolicy());
 
+/**
+ * 获取单个短链接的统计数据
+ * @param requestParam 包含短链接、开始日期和结束日期的请求参数
+ * @return 包含各种统计数据的响应DTO
+ */
     @Override
     public ShortLinkStatsRespDTO oneShortLinkStats(ShortLinkStatsReqDTO requestParam) {
+    // 验证用户是否有权限访问该分组
         checkGroupBelongToUser(requestParam.getGid());
 
         // 性能优化：Redis 结果缓存，60s TTL，相同参数的查询直接返回缓存
@@ -103,6 +109,7 @@ public class ShortLinkStatsServiceImpl implements ShortLinkStatsService {
         org.redisson.api.RLock lock = redissonClient.getLock("lock:" + resultCacheKey);
         boolean locked = false;
         try {
+        // 尝试获取锁，最多等待200ms，锁持有时间最长5000ms
             locked = lock.tryLock(200, 5000, TimeUnit.MILLISECONDS);
             if (!locked) {
                 throw new ServiceException("系统繁忙，统计数据拉取中，请稍后再试");
@@ -112,6 +119,7 @@ public class ShortLinkStatsServiceImpl implements ShortLinkStatsService {
             if (StrUtil.isNotBlank(cachedResult)) {
                 return com.alibaba.fastjson2.JSON.parseObject(cachedResult, ShortLinkStatsRespDTO.class);
             }
+        // 处理日期格式，去除多余的时间部分
         String startDate = requestParam.getStartDate();
         String endDate = requestParam.getEndDate();
         if (StrUtil.isNotBlank(startDate) && startDate.split(" ").length > 2) {
@@ -122,9 +130,11 @@ public class ShortLinkStatsServiceImpl implements ShortLinkStatsService {
         }
         requestParam.setStartDate(startDate);
         requestParam.setEndDate(endDate);
+        // 生成日期范围列表
         List<String> rangeDates = DateUtil.rangeToList(DateUtil.parse(startDate), DateUtil.parse(endDate), DateField.DAY_OF_MONTH)
                 .stream().map(DateUtil::formatDate).toList();
 
+        // 如果不是 ClickHouse 作为主要存储，则查询统计数据
         if (!"clickhouse".equalsIgnoreCase(statsPrimary)) {
             List<LinkAccessStatsDO> listStatsByShortLink = linkAccessStatsMapper.listStatsByShortLink(requestParam);
             if (CollUtil.isEmpty(listStatsByShortLink)) {
@@ -135,6 +145,7 @@ public class ShortLinkStatsServiceImpl implements ShortLinkStatsService {
         // 基础访问数据（PV/UV/UIP 汇总）- 串行先执行（后续并行查询依赖其结果判空）
         LinkAccessStatsDO pvUvUidStatsByShortLink = new LinkAccessStatsDO();
         if ("clickhouse".equalsIgnoreCase(statsPrimary)) {
+            // 使用 ClickHouse 查询 PV/UV/UIP 数据
             Map<String, Object> sumMap = clickHouseStatsMapper.sumPvUvUipByShortLink(requestParam.getFullShortUrl(), startDate, endDate);
             if (sumMap == null || sumMap.get("pv") == null) {
                 return null;
@@ -143,15 +154,17 @@ public class ShortLinkStatsServiceImpl implements ShortLinkStatsService {
             pvUvUidStatsByShortLink.setUv(Integer.parseInt(sumMap.get("uv").toString()));
             pvUvUidStatsByShortLink.setUip(Integer.parseInt(sumMap.get("uip").toString()));
         } else {
+            // 使用 MySQL 查询 PV/UV/UIP 数据
             pvUvUidStatsByShortLink = linkAccessLogsMapper.findPvUvUidStatsByShortLink(requestParam);
             if (pvUvUidStatsByShortLink == null) {
                 return null;
             }
         }
 
-        // 按天 daily 数据
+        // 按天 daily 数据统计
         List<ShortLinkStatsAccessDailyRespDTO> daily = new ArrayList<>();
         if ("clickhouse".equalsIgnoreCase(statsPrimary)) {
+            // 使用 ClickHouse 按天统计数据
             List<Map<String, Object>> chDaily = clickHouseStatsMapper.listDailyStatsByShortLink(requestParam.getFullShortUrl(), startDate, endDate);
             Map<String, Map<String, Object>> chDailyMap = new HashMap<>();
             chDaily.forEach(row -> chDailyMap.put(row.get("date").toString(), row));
@@ -167,6 +180,7 @@ public class ShortLinkStatsServiceImpl implements ShortLinkStatsService {
                 }
             });
         } else {
+            // 使用 MySQL 按天统计数据
             List<LinkAccessStatsDO> listStatsByShortLink = linkAccessStatsMapper.listStatsByShortLink(requestParam);
             rangeDates.forEach(each -> listStatsByShortLink.stream()
                     .filter(item -> Objects.equals(each, DateUtil.formatDate(item.getDate()))).findFirst()
@@ -176,9 +190,11 @@ public class ShortLinkStatsServiceImpl implements ShortLinkStatsService {
         }
 
         // ===== 并行执行所有独立的多维度统计查询 =====
+        // 创建最终请求参数的副本，用于并行查询
         final ShortLinkStatsReqDTO fp = requestParam;
         final String fs = startDate, fe = endDate;
 
+        // 地区统计查询
         CompletableFuture<List<LinkLocaleStatsDO>> localeFuture = CompletableFuture.supplyAsync(() -> {
             if ("clickhouse".equalsIgnoreCase(statsPrimary)) {
                 return clickHouseStatsMapper.listLocaleStatsByShortLink(fp.getFullShortUrl(), fs, fe).stream().map(row -> {
@@ -191,23 +207,32 @@ public class ShortLinkStatsServiceImpl implements ShortLinkStatsService {
             return linkLocaleStatsMapper.listLocaleByShortLink(fp);
         }, STATS_QUERY_EXECUTOR);
 
+        // 小时统计查询
         CompletableFuture<List<LinkAccessStatsDO>> hourFuture = CompletableFuture.supplyAsync(
                 () -> linkAccessStatsMapper.listHourStatsByShortLink(fp), STATS_QUERY_EXECUTOR);
+        // Top IP统计查询
         CompletableFuture<List<HashMap<String, Object>>> topIpFuture = CompletableFuture.supplyAsync(
                 () -> linkAccessLogsMapper.listTopIpByShortLink(fp), STATS_QUERY_EXECUTOR);
+        // 星期统计查询
         CompletableFuture<List<LinkAccessStatsDO>> weekdayFuture = CompletableFuture.supplyAsync(
                 () -> linkAccessStatsMapper.listWeekdayStatsByShortLink(fp), STATS_QUERY_EXECUTOR);
+        // 浏览器统计查询
         CompletableFuture<List<HashMap<String, Object>>> browserFuture = CompletableFuture.supplyAsync(
                 () -> linkBrowserStatsMapper.listBrowserStatsByShortLink(fp), STATS_QUERY_EXECUTOR);
+        // 操作系统统计查询
         CompletableFuture<List<HashMap<String, Object>>> osFuture = CompletableFuture.supplyAsync(
                 () -> linkOsStatsMapper.listOsStatsByShortLink(fp), STATS_QUERY_EXECUTOR);
+        // UV类型统计查询
         CompletableFuture<HashMap<String, Object>> uvTypeFuture = CompletableFuture.supplyAsync(
                 () -> linkAccessLogsMapper.findUvTypeCntByShortLink(fp), STATS_QUERY_EXECUTOR);
+        // 设备统计查询
         CompletableFuture<List<LinkDeviceStatsDO>> deviceFuture = CompletableFuture.supplyAsync(
                 () -> linkDeviceStatsMapper.listDeviceStatsByShortLink(fp), STATS_QUERY_EXECUTOR);
+        // 网络统计查询
         CompletableFuture<List<LinkNetworkStatsDO>> networkFuture = CompletableFuture.supplyAsync(
                 () -> linkNetworkStatsMapper.listNetworkStatsByShortLink(fp), STATS_QUERY_EXECUTOR);
 
+        // 等待所有并行查询完成
         CompletableFuture.allOf(localeFuture, hourFuture, topIpFuture, weekdayFuture,
                 browserFuture, osFuture, uvTypeFuture, deviceFuture, networkFuture).join();
 
