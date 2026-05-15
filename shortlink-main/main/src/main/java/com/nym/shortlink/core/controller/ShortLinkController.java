@@ -17,6 +17,7 @@ import com.nym.shortlink.core.dto.resp.ShortLinkPageRespDTO;
 import com.nym.shortlink.core.toolkit.EasyExcelWebUtil;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -44,7 +45,7 @@ public class ShortLinkController {
      */
     @RateLimit(resource = "create_short-link", qps = 200, controlBehavior = RuleConstant.CONTROL_BEHAVIOR_RATE_LIMITER, maxQueueingTimeMs = 2000, message = "创建请求过于频繁，请稍后再试")
     @PostMapping("/api/short-link/admin/v1/create")
-    public Result<ShortLinkCreateRespDTO> createShortLink(@RequestBody ShortLinkCreateReqDTO requestParam) {
+    public Result<ShortLinkCreateRespDTO> createShortLink(@Valid @RequestBody ShortLinkCreateReqDTO requestParam) {
         Result<ShortLinkCreateRespDTO> result = Results.success(shortLinkService.createShortLink(requestParam));
         return result;
     }
@@ -54,7 +55,7 @@ public class ShortLinkController {
      */
     @RateLimit(resource = "create-by-lock_short-link", qps = 100, controlBehavior = RuleConstant.CONTROL_BEHAVIOR_RATE_LIMITER, maxQueueingTimeMs = 2000, message = "创建请求过于频繁，请稍后再试")
     @PostMapping("/api/short-link/admin/v1/create/by-lock")
-    public Result<ShortLinkCreateRespDTO> createShortLinkByLock(@RequestBody ShortLinkCreateReqDTO requestParam) {
+    public Result<ShortLinkCreateRespDTO> createShortLinkByLock(@Valid @RequestBody ShortLinkCreateReqDTO requestParam) {
         return Results.success(shortLinkService.createShortLinkByLock(requestParam));
     }
 
@@ -78,7 +79,7 @@ public class ShortLinkController {
      */
     @RateLimit(resource = "update_short-link", qps = 5)
     @PostMapping("/api/short-link/admin/v1/update")
-    public Result<Void> updateShortLink(@RequestBody ShortLinkUpdateReqDTO requestParam) {
+    public Result<Void> updateShortLink(@Valid @RequestBody ShortLinkUpdateReqDTO requestParam) {
         shortLinkService.updateShortLink(requestParam);
         return Results.success();
     }

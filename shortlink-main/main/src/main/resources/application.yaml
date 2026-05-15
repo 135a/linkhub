@@ -40,7 +40,7 @@ short-link:
     default: ${DOMAIN:127.0.0.1:8001}
   stats:
     locale:
-      amap-key: 99b616b8433a465891a505ab161746af
+      amap-key: ${SHORTLINK_AMAP_KEY:99b616b8433a465891a505ab161746af}
   goto-domain:
     white-list:
       enable: false

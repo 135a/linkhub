@@ -10,6 +10,7 @@ import com.nym.shortlink.core.mq.producer.ShortLinkStatsSaveProducer;
 import com.nym.shortlink.core.service.CacheMonitoringService;
 import com.nym.shortlink.core.service.PerformanceCounterService;
 import com.github.benmanes.caffeine.cache.Cache;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -65,6 +66,8 @@ class ShortLinkServiceUpdateTest {
     void setUp() {
         lenient().when(stringRedisTemplate.opsForValue()).thenReturn(valueOperations);
         ReflectionTestUtils.setField(shortLinkService, "baseMapper", shortLinkMapper);
+        ReflectionTestUtils.setField(shortLinkService, "meterRegistry", new SimpleMeterRegistry());
+        shortLinkService.initMetrics();
     }
 
     @Test

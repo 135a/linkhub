@@ -3,8 +3,8 @@ dataSources:
     dataSourceClassName: com.zaxxer.hikari.HikariDataSource
     driverClassName: com.mysql.cj.jdbc.Driver
     jdbcUrl: jdbc:mysql://shortlink-mysql:3306/link?useUnicode=true&characterEncoding=UTF-8&rewriteBatchedStatements=true&allowMultiQueries=true&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
-    username: root
-    password: root
+    username: ${SHORTLINK_DB_USERNAME}
+    password: ${SHORTLINK_DB_PASSWORD}
 
 rules:
   - !SHARDING
@@ -65,6 +65,6 @@ rules:
       common_encryptor:
         type: AES
         props:
-          aes-key-value: d6oadClrrb9A3GWo
+          aes-key-value: ${SHORTLINK_AES_SECRET_KEY}
 props:
   sql-show: false

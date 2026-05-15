@@ -21,6 +21,7 @@ import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import com.nym.shortlink.core.service.impl.ShortLinkServiceImpl;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
@@ -67,6 +68,14 @@ class BloomFilterPenetrationTest {
         lenient().when(request.getCookies()).thenReturn(null);
         lenient().when(request.getRemoteAddr()).thenReturn("203.0.113.1");
         ReflectionTestUtils.setField(shortLinkService, "baseMapper", shortLinkMapper);
+        ReflectionTestUtils.setField(shortLinkService, "meterRegistry", new SimpleMeterRegistry());
+        try {
+            java.lang.reflect.Method initMetrics = ShortLinkServiceImpl.class.getDeclaredMethod("initMetrics");
+            initMetrics.setAccessible(true);
+            initMetrics.invoke(shortLinkService);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 
     @Test

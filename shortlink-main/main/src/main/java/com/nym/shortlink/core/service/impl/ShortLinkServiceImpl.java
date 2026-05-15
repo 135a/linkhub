@@ -38,6 +38,9 @@ import com.nym.shortlink.core.service.PerformanceCounterService;
 import com.nym.shortlink.core.service.ShortLinkService;
 import com.nym.shortlink.core.toolkit.HashUtil;
 import com.nym.shortlink.core.toolkit.LinkUtil;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import jakarta.servlet.ServletRequest;
 import jakarta.servlet.ServletResponse;
 import jakarta.servlet.http.Cookie;
@@ -59,6 +62,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import jakarta.annotation.PostConstruct;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.ArrayList;
@@ -100,13 +104,42 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
             Runtime.getRuntime().availableProcessors() * 2,
             60L, java.util.concurrent.TimeUnit.SECONDS,
             new java.util.concurrent.ArrayBlockingQueue<>(2000),
-            new java.util.concurrent.ThreadPoolExecutor.DiscardPolicy()
+            new java.util.concurrent.ThreadPoolExecutor.CallerRunsPolicy()
     );
 
     private final GotoDomainWhiteListConfiguration gotoDomainWhiteListConfiguration;
     private final CacheMonitoringService cacheMonitoringService;
     private final PerformanceCounterService performanceCounterService;
     private final Cache<String, String> redirectCache;
+    private final MeterRegistry meterRegistry;
+    private Counter redirectCounterL1;
+    private Counter redirectCounterL2;
+    private Counter redirectCounterL3;
+    private Counter redirectCounterNotFound;
+    private Timer redirectTimer;
+
+    @PostConstruct
+    void initMetrics() {
+        this.redirectCounterL1 = Counter.builder("shortlink_redirect_total")
+                .description("短链接重定向总数")
+                .tag("cache_level", "L1")
+                .register(meterRegistry);
+        this.redirectCounterL2 = Counter.builder("shortlink_redirect_total")
+                .description("短链接重定向总数")
+                .tag("cache_level", "L2")
+                .register(meterRegistry);
+        this.redirectCounterL3 = Counter.builder("shortlink_redirect_total")
+                .description("短链接重定向总数")
+                .tag("cache_level", "L3")
+                .register(meterRegistry);
+        this.redirectCounterNotFound = Counter.builder("shortlink_redirect_total")
+                .description("短链接重定向总数")
+                .tag("cache_level", "not_found")
+                .register(meterRegistry);
+        this.redirectTimer = Timer.builder("shortlink_redirect_duration_seconds")
+                .description("短链接重定向耗时")
+                .register(meterRegistry);
+    }
 
     @Value("${short-link.domain.default}")
     private String createShortLinkDefaultDomain;
@@ -410,101 +443,128 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
     @SneakyThrows
     @Override
     public void restoreUrl(String shortUri, ServletRequest request, ServletResponse response) {
-        String serverName = request.getServerName();
-        String serverPort = Optional.of(request.getServerPort())
-                .filter(each -> !Objects.equals(each, 80))
-                .map(String::valueOf)
-                .map(each -> ":" + each)
-                .orElse("");
-        String fullShortUrl = serverName + serverPort + "/" + shortUri;
-        String requestFullShortUrl = fullShortUrl; // 保存原始请求域名，用于打破缓存穿透循环
+        Timer.Sample sample = Timer.start(meterRegistry);
+        try {
+            String serverName = request.getServerName();
+            String serverPort = Optional.of(request.getServerPort())
+                    .filter(each -> !Objects.equals(each, 80))
+                    .map(String::valueOf)
+                    .map(each -> ":" + each)
+                    .orElse("");
+            String fullShortUrl = serverName + serverPort + "/" + shortUri;
+            String requestFullShortUrl = fullShortUrl;
 
-        // 0. L1 Caffeine 本地缓存（优先级最高）
-        String l1CachedLink = redirectCache.getIfPresent(fullShortUrl);
-        if (StrUtil.isNotBlank(l1CachedLink)) {
-            cacheMonitoringService.recordL1HitAsync();
-            ShortLinkStatsRecordDTO statsRecord = buildLinkStatsRecordAndSetUser(fullShortUrl, request, response);
-            ((HttpServletResponse) response).sendRedirect(l1CachedLink);
-            STATS_EXECUTOR.submit(() -> shortLinkStats(statsRecord));
-            return;
-        }
-
-        // 1. 先从 Redis 缓存获取（L2）
-        String originalLink = stringRedisTemplate.opsForValue().get(String.format(GOTO_SHORT_LINK_KEY, fullShortUrl));
-        if (StrUtil.isNotBlank(originalLink)) {
-            cacheMonitoringService.recordHitAsync();
-            // 回填 L1
-            redirectCache.put(fullShortUrl, originalLink);
-            ShortLinkStatsRecordDTO statsRecord = buildLinkStatsRecordAndSetUser(fullShortUrl, request, response);
-            ((HttpServletResponse) response).sendRedirect(originalLink);
-            STATS_EXECUTOR.submit(() -> shortLinkStats(statsRecord));
-            return;
-        }
-
-        // 2. 判断布隆过滤器（使用当前请求的 fullShortUrl）
-        boolean contains = shortUriCreateCachePenetrationBloomFilter.contains(fullShortUrl);
-        if (!contains) {
-            // 布隆过滤器未命中可能是因为创建时域名与当前域名不同，降级按 shortUri 查库
-            LambdaQueryWrapper<ShortLinkDO> uriQueryWrapper = Wrappers.lambdaQuery(ShortLinkDO.class)
-                    .eq(ShortLinkDO::getShortUri, shortUri)
-                    .eq(ShortLinkDO::getDelFlag, 0)
-                    .eq(ShortLinkDO::getEnableStatus, 0)
-                    .last("LIMIT 1");
-            ShortLinkDO shortLinkByUri = baseMapper.selectOne(uriQueryWrapper);
-            if (shortLinkByUri == null) {
-                cacheMonitoringService.recordMissAsync();
-                performanceCounterService.incrementBloomFilterIntercept();
-                ((HttpServletResponse) response).sendRedirect("/page/notfound");
+            // 1. L1 Caffeine 本地缓存
+            String l1CachedLink = redirectCache.getIfPresent(fullShortUrl);
+            if (StrUtil.isNotBlank(l1CachedLink)) {
+                redirectCounterL1.increment();
+                cacheMonitoringService.recordL1HitAsync();
+                redirectWithStats(l1CachedLink, fullShortUrl, request, response);
                 return;
             }
-            // 找到了，用数据库记录的 fullShortUrl 作为缓存 key 继续流程
-            fullShortUrl = shortLinkByUri.getFullShortUrl();
-        }
 
-        // 3. 检查空值缓存（防止缓存穿透）
-        String gotoIsNullShortLink = stringRedisTemplate.opsForValue()
-                .get(String.format(GOTO_IS_NULL_SHORT_LINK_KEY, fullShortUrl));
-        if (StrUtil.isNotBlank(gotoIsNullShortLink)) {
+            // 2. L2 Redis 缓存
+            String originalLink = stringRedisTemplate.opsForValue().get(String.format(GOTO_SHORT_LINK_KEY, fullShortUrl));
+            if (StrUtil.isNotBlank(originalLink)) {
+                redirectCounterL2.increment();
+                cacheMonitoringService.recordHitAsync();
+                redirectCache.put(fullShortUrl, originalLink);
+                redirectWithStats(originalLink, fullShortUrl, request, response);
+                return;
+            }
+
+            // 3. 布隆过滤器 + 降级按 shortUri 查库
+            String effectiveFullShortUrl = resolveByBloomFilter(fullShortUrl, shortUri);
+            if (effectiveFullShortUrl == null) {
+                redirectToNotFound(response);
+                return;
+            }
+
+            // 4. 空值缓存
+            if (StrUtil.isNotBlank(stringRedisTemplate.opsForValue()
+                    .get(String.format(GOTO_IS_NULL_SHORT_LINK_KEY, effectiveFullShortUrl)))) {
+                cacheMonitoringService.recordMissAsync();
+                redirectToNotFound(response);
+                return;
+            }
+
+            // 5. 分布式锁 + 双重检查 + 查库
+            String dbOriginUrl = queryDatabaseUnderLock(effectiveFullShortUrl, requestFullShortUrl);
+            if (dbOriginUrl != null) {
+                redirectCounterL3.increment();
+                redirectCache.put(effectiveFullShortUrl, dbOriginUrl);
+                if (!Objects.equals(requestFullShortUrl, effectiveFullShortUrl)) {
+                    redirectCache.put(requestFullShortUrl, dbOriginUrl);
+                }
+                cacheMonitoringService.recordMissAsync();
+                redirectWithStats(dbOriginUrl, effectiveFullShortUrl, request, response);
+            } else {
+                redirectToNotFound(response);
+            }
+        } finally {
+            sample.stop(redirectTimer);
+        }
+    }
+
+    /**
+     * 布隆过滤器检查：未命中时降级按 shortUri 查库
+     * @return 有效的 fullShortUrl，或 null 表示记录不存在
+     */
+    private String resolveByBloomFilter(String fullShortUrl, String shortUri) {
+        if (shortUriCreateCachePenetrationBloomFilter.contains(fullShortUrl)) {
+            return fullShortUrl;
+        }
+        LambdaQueryWrapper<ShortLinkDO> uriQueryWrapper = Wrappers.lambdaQuery(ShortLinkDO.class)
+                .eq(ShortLinkDO::getShortUri, shortUri)
+                .eq(ShortLinkDO::getDelFlag, 0)
+                .eq(ShortLinkDO::getEnableStatus, 0)
+                .last("LIMIT 1");
+        ShortLinkDO shortLinkByUri = baseMapper.selectOne(uriQueryWrapper);
+        if (shortLinkByUri == null) {
             cacheMonitoringService.recordMissAsync();
-            ((HttpServletResponse) response).sendRedirect("/page/notfound");
-            return;
+            performanceCounterService.incrementBloomFilterIntercept();
+            return null;
         }
+        return shortLinkByUri.getFullShortUrl();
+    }
 
-        // 4. 加锁查库（双重检查）
+    /**
+     * 分布式锁 + 双重检查 Redis + 查库（t_link_goto → t_link）
+     * @return 原始 URL，或 null 表示不应该重定向
+     */
+    @SneakyThrows
+    private String queryDatabaseUnderLock(String fullShortUrl, String requestFullShortUrl) {
         RLock lock = redissonClient.getLock(String.format(LOCK_GOTO_SHORT_LINK_KEY, fullShortUrl));
         lock.lock();
         try {
-            originalLink = stringRedisTemplate.opsForValue().get(String.format(GOTO_SHORT_LINK_KEY, fullShortUrl));
+            // 双重检查 L2
+            String originalLink = stringRedisTemplate.opsForValue()
+                    .get(String.format(GOTO_SHORT_LINK_KEY, fullShortUrl));
             if (StrUtil.isNotBlank(originalLink)) {
                 cacheMonitoringService.recordHitAsync();
-                // 回填 L1
                 redirectCache.put(fullShortUrl, originalLink);
-                // 核心修复：如果请求域名与数据库域名不一致，也要将请求域名加入 L1 缓存，彻底打破无限查库穿透的死循环！
                 if (!Objects.equals(requestFullShortUrl, fullShortUrl)) {
                     redirectCache.put(requestFullShortUrl, originalLink);
                 }
-                ShortLinkStatsRecordDTO statsRecord = buildLinkStatsRecordAndSetUser(fullShortUrl, request, response);
-                ((HttpServletResponse) response).sendRedirect(originalLink);
-                STATS_EXECUTOR.submit(() -> shortLinkStats(statsRecord));
-                return;
+                return originalLink;
             }
-            gotoIsNullShortLink = stringRedisTemplate.opsForValue()
-                    .get(String.format(GOTO_IS_NULL_SHORT_LINK_KEY, fullShortUrl));
-            if (StrUtil.isNotBlank(gotoIsNullShortLink)) {
+            // 双重检查空值缓存
+            if (StrUtil.isNotBlank(stringRedisTemplate.opsForValue()
+                    .get(String.format(GOTO_IS_NULL_SHORT_LINK_KEY, fullShortUrl)))) {
                 cacheMonitoringService.recordMissAsync();
-                ((HttpServletResponse) response).sendRedirect("/page/notfound");
-                return;
+                return null;
             }
+            // 查 t_link_goto
             LambdaQueryWrapper<ShortLinkGotoDO> linkGotoQueryWrapper = Wrappers.lambdaQuery(ShortLinkGotoDO.class)
                     .eq(ShortLinkGotoDO::getFullShortUrl, fullShortUrl);
             ShortLinkGotoDO shortLinkGotoDO = shortLinkGotoMapper.selectOne(linkGotoQueryWrapper);
             if (shortLinkGotoDO == null) {
-                stringRedisTemplate.opsForValue().set(String.format(GOTO_IS_NULL_SHORT_LINK_KEY, fullShortUrl), "-", 30,
-                        TimeUnit.MINUTES);
+                stringRedisTemplate.opsForValue().set(
+                        String.format(GOTO_IS_NULL_SHORT_LINK_KEY, fullShortUrl), "-", 30, TimeUnit.MINUTES);
                 cacheMonitoringService.recordMissAsync();
-                ((HttpServletResponse) response).sendRedirect("/page/notfound");
-                return;
+                return null;
             }
+            // 查 t_link
             LambdaQueryWrapper<ShortLinkDO> queryWrapper = Wrappers.lambdaQuery(ShortLinkDO.class)
                     .eq(ShortLinkDO::getGid, shortLinkGotoDO.getGid())
                     .eq(ShortLinkDO::getFullShortUrl, fullShortUrl)
@@ -513,30 +573,39 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
             ShortLinkDO shortLinkDO = baseMapper.selectOne(queryWrapper);
             if (shortLinkDO == null
                     || (shortLinkDO.getValidDate() != null && shortLinkDO.getValidDate().before(new Date()))) {
-                stringRedisTemplate.opsForValue().set(String.format(GOTO_IS_NULL_SHORT_LINK_KEY, fullShortUrl), "-", 30,
-                        TimeUnit.MINUTES);
+                stringRedisTemplate.opsForValue().set(
+                        String.format(GOTO_IS_NULL_SHORT_LINK_KEY, fullShortUrl), "-", 30, TimeUnit.MINUTES);
                 cacheMonitoringService.recordMissAsync();
-                ((HttpServletResponse) response).sendRedirect("/page/notfound");
-                return;
+                return null;
             }
+            // 回填 L2 + 返回
             stringRedisTemplate.opsForValue().set(
                     String.format(GOTO_SHORT_LINK_KEY, fullShortUrl),
                     shortLinkDO.getOriginUrl(),
                     LinkUtil.getLinkCacheValidTime(shortLinkDO.getValidDate()), TimeUnit.MILLISECONDS);
-            // 回填 L1 缓存
-            redirectCache.put(fullShortUrl, shortLinkDO.getOriginUrl());
-            if (!Objects.equals(requestFullShortUrl, fullShortUrl)) {
-                redirectCache.put(requestFullShortUrl, shortLinkDO.getOriginUrl());
-            }
-            cacheMonitoringService.recordMissAsync();
-            ShortLinkStatsRecordDTO statsRecord = buildLinkStatsRecordAndSetUser(fullShortUrl, request, response);
-            ((HttpServletResponse) response).sendRedirect(shortLinkDO.getOriginUrl());
-            STATS_EXECUTOR.submit(() -> shortLinkStats(statsRecord));
+            return shortLinkDO.getOriginUrl();
         } finally {
             if (lock.isHeldByCurrentThread()) {
                 lock.unlock();
             }
         }
+    }
+
+    /**
+     * 统一的重定向 + 统计记录（消除 5 处复制粘贴）
+     */
+    @SneakyThrows
+    private void redirectWithStats(String originUrl, String fullShortUrl,
+            ServletRequest request, ServletResponse response) {
+        ShortLinkStatsRecordDTO statsRecord = buildLinkStatsRecordAndSetUser(fullShortUrl, request, response);
+        ((HttpServletResponse) response).sendRedirect(originUrl);
+        STATS_EXECUTOR.submit(() -> shortLinkStats(statsRecord));
+    }
+
+    @SneakyThrows
+    private void redirectToNotFound(ServletResponse response) {
+        redirectCounterNotFound.increment();
+        ((HttpServletResponse) response).sendRedirect("/page/notfound");
     }
 
     private ShortLinkStatsRecordDTO buildLinkStatsRecordAndSetUser(String fullShortUrl, ServletRequest request,

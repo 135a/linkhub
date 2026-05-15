@@ -7,6 +7,7 @@ import com.nym.shortlink.core.dao.mapper.ShortLinkMapper;
 import com.nym.shortlink.core.mq.producer.ShortLinkStatsSaveProducer;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.nym.shortlink.core.service.impl.ShortLinkServiceImpl;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.junit.jupiter.api.BeforeEach;
@@ -72,6 +73,14 @@ class DistributedLockDoubleCheckTest {
         lenient().when(request.getCookies()).thenReturn(null);
         lenient().when(request.getRemoteAddr()).thenReturn("203.0.113.1");
         ReflectionTestUtils.setField(shortLinkService, "baseMapper", shortLinkMapper);
+        ReflectionTestUtils.setField(shortLinkService, "meterRegistry", new SimpleMeterRegistry());
+        try {
+            java.lang.reflect.Method initMetrics = ShortLinkServiceImpl.class.getDeclaredMethod("initMetrics");
+            initMetrics.setAccessible(true);
+            initMetrics.invoke(shortLinkService);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 
     @Test
@@ -88,7 +97,7 @@ class DistributedLockDoubleCheckTest {
         shortLinkService.restoreUrl("backfilled", request, response);
 
         verify(cacheMonitoringService, atLeastOnce()).recordHitAsync();
-        verify(redirectCache).put(eq(fullShortUrl), eq("https://example.com/backfilled"));
+        verify(redirectCache, atLeastOnce()).put(eq(fullShortUrl), eq("https://example.com/backfilled"));
         verify(response).sendRedirect("https://example.com/backfilled");
         // 不应查询数据库
         verify(shortLinkMapper, never()).selectOne(any());

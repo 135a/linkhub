@@ -134,6 +134,12 @@
             <scope>test</scope>
         </dependency>
 
+        <!-- BCrypt 密码哈希（仅 crypto 模块，不引入 spring-security 全家桶） -->
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-crypto</artifactId>
+        </dependency>
+
         <!-- Caffeine L1 本地缓存 -->
         <dependency>
             <groupId>com.github.ben-manes.caffeine</groupId>
