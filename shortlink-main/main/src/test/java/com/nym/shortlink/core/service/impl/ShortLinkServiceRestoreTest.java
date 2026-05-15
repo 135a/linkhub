@@ -8,6 +8,7 @@ import com.nym.shortlink.core.dao.mapper.ShortLinkMapper;
 import com.nym.shortlink.core.mq.producer.ShortLinkStatsSaveProducer;
 import com.nym.shortlink.core.service.CacheMonitoringService;
 import com.nym.shortlink.core.service.PerformanceCounterService;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.junit.jupiter.api.BeforeEach;
@@ -73,6 +74,8 @@ class ShortLinkServiceRestoreTest {
         lenient().when(request.getCookies()).thenReturn(null);
         lenient().when(request.getRemoteAddr()).thenReturn("203.0.113.1");
         ReflectionTestUtils.setField(shortLinkService, "baseMapper", shortLinkMapper);
+        ReflectionTestUtils.setField(shortLinkService, "meterRegistry", new SimpleMeterRegistry());
+        shortLinkService.initMetrics();
     }
 
     @Test

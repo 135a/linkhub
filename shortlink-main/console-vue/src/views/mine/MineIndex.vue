@@ -58,7 +58,7 @@
           <span>{{ userInfo?.data?.data?.mail }}</span>
         </el-descriptions-item>
       </el-descriptions>
-      <el-button style="position: absolute;left: 35px; top: 250px; " type="primary" @click="dialogVisible = !dialogVisible">修改个人信息</el-button>
+      <el-button style="margin-top: 20px; align-self: flex-start;" type="primary" @click="dialogVisible = !dialogVisible">修改个人信息</el-button>
     </div>
   </div>
   <!-- 修改信息 -->
@@ -246,6 +246,26 @@ const changeUserInfo = (formEl) => {
   }
 }
 :deep(.el-descriptions__body) {
-  width: 500px;
+  width: 100%;
+  max-width: 500px;
+}
+
+@media (max-width: 767px) {
+  .options-box {
+    width: 120px;
+  }
+
+  .main-box {
+    padding: 10px;
+    height: calc(100vh - 54px);
+  }
+
+  .content-box {
+    padding: 12px;
+  }
+
+  :deep(.el-descriptions__label) {
+    width: 80px !important;
+  }
 }
 </style>

@@ -67,8 +67,12 @@
         <!-- 默认展示创建短链输入框和按钮 -->
         <div v-if="!isRecycleBin" class="buttons-box">
           <div style="width: 100%; display: flex; flex-wrap: wrap; gap: 8px; align-items: center">
-            <el-button class="addButton" type="primary" @click="isAddSmallLink = true">创建短链</el-button>
-            <el-button @click="isAddSmallLinks = true">批量创建</el-button>
+            <el-button class="addButton" type="primary" @click="isAddSmallLink = true">
+              <el-icon style="margin-right: 5px"><Plus /></el-icon><span class="btn-text">创建短链</span>
+            </el-button>
+            <el-button @click="isAddSmallLinks = true">
+              <el-icon style="margin-right: 5px"><DocumentAdd /></el-icon><span class="btn-text">批量创建</span>
+            </el-button>
             <el-button :disabled="selectedRows.length === 0" @click="exportExcel">
               <el-icon style="margin-right: 5px"><Download /></el-icon><span class="btn-text">导出 Excel</span>
             </el-button>
@@ -85,7 +89,8 @@
           <span>回收站</span>
           <span>共{{ recycleBinNums }}条短链接</span>
         </div>
-        <!-- 表格展示区域 -->
+        <!-- 表格展示区域（桌面端） -->
+        <template v-if="!isMobile">
         <el-table ref="tableRef" :data="tableData" height="calc(100vh - 240px)" style="width: 100%"
           :header-cell-style="{ background: '#f7f8fa', color: '#606266' }"
           @selection-change="handleSelectionChange">
@@ -302,6 +307,59 @@
             </template>
           </el-table-column>
         </el-table>
+        </template>
+        <!-- 卡片展示区域（移动端） -->
+        <div v-else class="card-list">
+          <div v-if="!tableData || tableData.length === 0" style="height: 60vh; display: flex; align-items: center; justify-content: center; color: #999;">
+            暂无链接
+          </div>
+          <div v-for="row in tableData" :key="row.fullShortUrl || row.id" class="link-card">
+            <div class="card-header">
+              <img :src="getImgUrl(row.favicon)" width="20" height="20" alt="" />
+              <span class="card-title">{{ row.describe }}</span>
+            </div>
+            <div class="card-url">
+              <el-link type="primary" :underline="false" target="_blank"
+                :disabled="row?.validDateType === 1 && !isExpire(row?.validDate)"
+                :href="'http://' + row.fullShortUrl">{{ row.domain + '/' + row.shortUri }}</el-link>
+            </div>
+            <div class="card-origin">{{ row.originUrl }}</div>
+            <div class="card-stats">
+              <div class="stat-item"><span class="stat-label">今日PV</span><span class="stat-value">{{ row.todayPv }}</span></div>
+              <div class="stat-item"><span class="stat-label">累计PV</span><span class="stat-value">{{ row.totalPv }}</span></div>
+              <div class="stat-item"><span class="stat-label">今日UV</span><span class="stat-value">{{ row.todayUv }}</span></div>
+              <div class="stat-item"><span class="stat-label">累计UV</span><span class="stat-value">{{ row.totalUv }}</span></div>
+            </div>
+            <div class="card-actions">
+              <el-tooltip show-after="500" content="复制链接" placement="top">
+                <el-button :icon="Share" text circle size="small" @click="copyUrl('http://' + row.fullShortUrl)" />
+              </el-tooltip>
+              <el-tooltip show-after="500" content="查看图表" placement="top">
+                <el-button :icon="Histogram" text circle size="small" @click="chartsVisible(row)" />
+              </el-tooltip>
+              <template v-if="selectedIndex !== -1">
+                <el-tooltip show-after="500" content="编辑" placement="top">
+                  <el-button :icon="Tools" text circle size="small" @click="editLink(row)" />
+                </el-tooltip>
+                <el-popconfirm width="100" title="是否移入回收站" @confirm="toRecycleBin(row)">
+                  <template #reference>
+                    <el-button :icon="Delete" text circle size="small" />
+                  </template>
+                </el-popconfirm>
+              </template>
+              <template v-else>
+                <el-tooltip show-after="500" content="恢复" placement="top">
+                  <el-button :icon="HelpFilled" text circle size="small" @click="recoverLink(row)" />
+                </el-tooltip>
+                <el-popconfirm width="300" title="删除后短链跳转会失效，这是一个不可逆的操作，是否删除?" @confirm="removeLink(row)">
+                  <template #reference>
+                    <el-button :icon="Delete" text circle size="small" />
+                  </template>
+                </el-popconfirm>
+              </template>
+            </div>
+          </div>
+        </div>
         <!-- 分页器 -->
         <div class="pagination-block">
           <el-pagination v-model:current-page="pageParams.current" v-model:page-size="pageParams.size"
@@ -394,11 +452,21 @@ import EditLink from './components/editLink/EditLink.vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import defaultImg from '@/assets/png/短链默认图标.png'
 import QRCode from './components/qrCode/QRCode.vue'
-import { Download, ArrowLeft, ArrowRight } from '@element-plus/icons-vue'
+import { Download, ArrowLeft, ArrowRight, Plus, DocumentAdd } from '@element-plus/icons-vue'
 import { getToken, getUsername } from '@/core/auth.js'
 
-// 移动端侧边栏折叠状态
-const sidebarCollapsed = ref(false)
+// 移动端侧边栏折叠状态（手机端默认折叠）
+const sidebarCollapsed = ref(window.innerWidth < 768)
+
+// 移动端检测
+const isMobile = ref(window.innerWidth < 768)
+let resizeTimer = null
+const handleResize = () => {
+  if (resizeTimer) clearTimeout(resizeTimer)
+  resizeTimer = setTimeout(() => {
+    isMobile.value = window.innerWidth < 768
+  }, 150)
+}
 
 // 查看图表的时候传过去展示的，没什么用
 const nums = ref(0)
@@ -616,6 +684,7 @@ onMounted(() => {
   initSortable('sortOptions')
   document.addEventListener('visibilitychange', handleVisibilityChange)
   window.addEventListener('focus', handleVisibilityChange)
+  window.addEventListener('resize', handleResize)
   
   // 建立 Server-Sent Events 连接，实现后端主动推送更新
   const username = getUsername()
@@ -648,6 +717,7 @@ onMounted(() => {
 onUnmounted(() => {
   document.removeEventListener('visibilitychange', handleVisibilityChange)
   window.removeEventListener('focus', handleVisibilityChange)
+  window.removeEventListener('resize', handleResize)
   if (sseSource) {
     sseSource.close()
   }
@@ -1321,6 +1391,88 @@ const removeLink = (data) => {
 .sidebar-toggle:hover {
   background: #f0f6ff;
   color: #3677c2;
+}
+
+/* ===== 移动端卡片布局 ===== */
+.card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 0;
+  height: calc(100vh - 200px);
+  overflow-y: auto;
+}
+
+.link-card {
+  background: #fff;
+  border-radius: 10px;
+  padding: 14px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  .card-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: #303133;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.card-url {
+  font-size: 13px;
+}
+
+.card-origin {
+  font-size: 12px;
+  color: #999;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.card-stats {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.stat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: #f5f7fa;
+  border-radius: 6px;
+  padding: 4px 10px;
+  min-width: 60px;
+
+  .stat-label {
+    font-size: 10px;
+    color: #999;
+  }
+
+  .stat-value {
+    font-size: 14px;
+    font-weight: 600;
+    color: #303133;
+  }
+}
+
+.card-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 4px;
+  border-top: 1px solid #f0f0f0;
+  padding-top: 8px;
 }
 
 /* ===== 响应式断点 ===== */

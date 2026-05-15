@@ -8,6 +8,7 @@ import com.nym.shortlink.core.dto.req.ShortLinkGroupSortReqDTO;
 import com.nym.shortlink.core.dto.req.ShortLinkGroupUpdateReqDTO;
 import com.nym.shortlink.core.dto.resp.ShortLinkGroupRespDTO;
 import com.nym.shortlink.core.service.GroupService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -36,7 +37,7 @@ public class GroupController {
      */
     @RateLimit(resource = "save_group", qps = 5)
     @PostMapping("/api/short-link/admin/v1/group")
-    public Result<Void> save(@RequestBody ShortLinkGroupSaveReqDTO requestParam) {
+    public Result<Void> save(@Valid @RequestBody ShortLinkGroupSaveReqDTO requestParam) {
         groupService.saveGroup(requestParam.getName());
         return Results.success();
     }
@@ -56,7 +57,7 @@ public class GroupController {
      */
     @RateLimit(resource = "update_group", qps = 5)
     @PutMapping("/api/short-link/admin/v1/group")
-    public Result<Void> updateGroup(@RequestBody ShortLinkGroupUpdateReqDTO requestParam) {
+    public Result<Void> updateGroup(@Valid @RequestBody ShortLinkGroupUpdateReqDTO requestParam) {
         groupService.updateGroup(requestParam);
         return Results.success();
     }

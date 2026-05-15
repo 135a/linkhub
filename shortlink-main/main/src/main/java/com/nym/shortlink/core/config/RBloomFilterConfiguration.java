@@ -71,6 +71,7 @@ public class RBloomFilterConfiguration {
             long expectedInsertions,
             double falseProbability) {
         
+        // 创建或获取指定名称的布隆过滤器实例
         RBloomFilter<String> bloomFilter = redissonClient.getBloomFilter(filterName);
         
         // 计算预期的 bit size 和 hash iterations

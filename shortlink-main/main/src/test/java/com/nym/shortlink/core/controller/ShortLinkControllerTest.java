@@ -1,5 +1,6 @@
 package com.nym.shortlink.core.controller;
 
+import com.nym.shortlink.core.common.convention.exception.GlobalExceptionHandler;
 import com.nym.shortlink.core.common.convention.result.Result;
 import com.nym.shortlink.core.dto.req.ShortLinkCreateReqDTO;
 import com.nym.shortlink.core.dto.resp.ShortLinkCreateRespDTO;
@@ -13,6 +14,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
@@ -30,9 +32,15 @@ class ShortLinkControllerTest {
 
     private MockMvc mockMvc;
 
+    @SuppressWarnings("resource")
     @BeforeEach
     void setUp() {
-        mockMvc = MockMvcBuilders.standaloneSetup(new ShortLinkController(shortLinkService)).build();
+        LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
+        validator.afterPropertiesSet();
+        mockMvc = MockMvcBuilders.standaloneSetup(new ShortLinkController(shortLinkService))
+                .setValidator(validator)
+                .setControllerAdvice(new GlobalExceptionHandler())
+                .build();
     }
 
     @Test
@@ -87,5 +95,50 @@ class ShortLinkControllerTest {
                         .param("size", "10"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("0"));
+    }
+
+    @Test
+    @DisplayName("创建短链接 originUrl 为空返回 400")
+    void createShortLinkWithBlankOriginUrlReturns400() throws Exception {
+        mockMvc.perform(post("/api/short-link/admin/v1/create")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                    "originUrl": "",
+                                    "gid": "test-gid"
+                                }"""))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("400"));
+    }
+
+    @Test
+    @DisplayName("创建短链接 gid 为空返回 400")
+    void createShortLinkWithBlankGidReturns400() throws Exception {
+        mockMvc.perform(post("/api/short-link/admin/v1/create")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                    "originUrl": "https://example.com",
+                                    "gid": ""
+                                }"""))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("400"));
+    }
+
+    @Test
+    @DisplayName("更新短链接 fullShortUrl 为空返回 400")
+    void updateShortLinkWithBlankFullShortUrlReturns400() throws Exception {
+        mockMvc.perform(post("/api/short-link/admin/v1/update")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                    "fullShortUrl": "",
+                                    "originGid": "test-gid",
+                                    "gid": "test-gid",
+                                    "originUrl": "https://updated.com",
+                                    "validDateType": 0
+                                }"""))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("400"));
     }
 }

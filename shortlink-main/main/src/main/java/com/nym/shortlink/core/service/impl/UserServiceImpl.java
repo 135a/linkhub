@@ -1,7 +1,6 @@
 package com.nym.shortlink.core.service.impl;
 
 import cn.hutool.core.bean.BeanUtil;
-import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.lang.UUID;
 import com.alibaba.fastjson2.JSON;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -28,10 +27,10 @@ import org.redisson.api.RedissonClient;
 import org.springframework.beans.BeanUtils;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
@@ -52,6 +51,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, UserDO> implements 
     private final RedissonClient redissonClient;
     private final StringRedisTemplate stringRedisTemplate;
     private final GroupService groupService;
+    private final PasswordEncoder passwordEncoder;
 
     @Override
     public UserRespDTO getUserByUsername(String username) {
@@ -82,6 +82,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, UserDO> implements 
             throw new ClientException(USER_NAME_EXIST);
         }
         try {
+            requestParam.setPassword(passwordEncoder.encode(requestParam.getPassword()));
             int inserted = baseMapper.insert(BeanUtil.toBean(requestParam, UserDO.class));
             if (inserted < 1) {
                 throw new ClientException(USER_SAVE_ERROR);
@@ -109,24 +110,12 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, UserDO> implements 
 
     @Override
     public UserLoginRespDTO login(UserLoginReqDTO requestParam) {
-        // 性能优化：优先检查 Redis，已登录的用户直接续期返回，完全跳过 MySQL 查询
-        Map<Object, Object> hasLoginMap = stringRedisTemplate.opsForHash().entries(USER_LOGIN_KEY + requestParam.getUsername());
-        if (CollUtil.isNotEmpty(hasLoginMap)) {
-            stringRedisTemplate.expire(USER_LOGIN_KEY + requestParam.getUsername(), 30L, TimeUnit.MINUTES);
-            String token = hasLoginMap.keySet().stream()
-                    .findFirst()
-                    .map(Object::toString)
-                    .orElseThrow(() -> new ClientException("用户登录错误"));
-            return new UserLoginRespDTO(token);
-        }
-        // Redis 无缓存时才查 MySQL 做完整身份校验
         LambdaQueryWrapper<UserDO> queryWrapper = Wrappers.lambdaQuery(UserDO.class)
                 .eq(UserDO::getUsername, requestParam.getUsername())
-                .eq(UserDO::getPassword, requestParam.getPassword())
                 .eq(UserDO::getDelFlag, 0);
         UserDO userDO = baseMapper.selectOne(queryWrapper);
-        if (userDO == null) {
-            throw new ClientException("用户不存在");
+        if (userDO == null || !passwordEncoder.matches(requestParam.getPassword(), userDO.getPassword())) {
+            throw new ClientException("用户不存在或密码错误");
         }
         /**
          * Hash

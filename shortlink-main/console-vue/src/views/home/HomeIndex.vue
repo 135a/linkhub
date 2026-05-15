@@ -18,6 +18,16 @@
               href="https://example.com/docs"
               >部署文档</a
             >
+            <!-- 移动端汉堡菜单 -->
+            <el-popover trigger="click" :width="160" placement="bottom-end" :show-arrow="false" class="show-mobile-inline">
+              <div class="mobile-menu">
+                <a class="mobile-menu-link" target="_blank" href="https://example.com">项目首页</a>
+                <a class="mobile-menu-link" target="_blank" href="https://example.com/docs">部署文档</a>
+              </div>
+              <template #reference>
+                <el-button class="hamburger-btn" :icon="Operation" text circle />
+              </template>
+            </el-popover>
             <el-dropdown>
               <div class="block">
                 <span
@@ -70,6 +80,7 @@ import { ref, getCurrentInstance, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { removeKey, removeUsername, getToken, getUsername } from '@/core/auth.js'
 import { ElMessage } from 'element-plus'
+import { Operation } from '@element-plus/icons-vue'
 const { proxy } = getCurrentInstance()
 const API = proxy.$API
 // 当当前路径和菜单不匹配时，菜单不会被选中
@@ -209,6 +220,31 @@ const truncateText = (text, maxLength) => {
 
 .avatar {
   transform: translateY(-2px);
+}
+
+/* ===== 汉堡菜单 ===== */
+.hamburger-btn {
+  color: #fff !important;
+  font-size: 20px;
+  border: none !important;
+  background: transparent !important;
+}
+
+.hamburger-btn:hover {
+  color: rgb(121, 187, 255) !important;
+}
+
+.mobile-menu-link {
+  display: block;
+  padding: 8px 16px;
+  color: #333;
+  font-size: 14px;
+  text-decoration: none;
+}
+
+.mobile-menu-link:hover {
+  background-color: #f5f7fa;
+  color: #2C85EC;
 }
 
 /* ===== 响应式断点 ===== */

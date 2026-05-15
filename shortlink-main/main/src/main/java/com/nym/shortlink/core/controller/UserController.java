@@ -11,6 +11,7 @@ import com.nym.shortlink.core.dto.resp.UserActualRespDTO;
 import com.nym.shortlink.core.dto.resp.UserLoginRespDTO;
 import com.nym.shortlink.core.dto.resp.UserRespDTO;
 import com.nym.shortlink.core.service.UserService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -68,7 +69,7 @@ public class UserController {
      */
     @RateLimit(resource = "user_register", qps = 1, message = "操作过于频繁，请稍后再试")
     @PostMapping("/api/short-link/admin/v1/user")
-    public Result<Void> register(@RequestBody UserRegisterReqDTO requestParam) {
+    public Result<Void> register(@Valid @RequestBody UserRegisterReqDTO requestParam) {
         userService.register(requestParam);
         return Results.success();
     }
@@ -88,7 +89,7 @@ public class UserController {
      */
     @RateLimit(resource = "user_login", qps = 5, message = "登录过于频繁，请稍后再试")
     @PostMapping("/api/short-link/admin/v1/user/login")
-    public Result<UserLoginRespDTO> login(@RequestBody UserLoginReqDTO requestParam) {
+    public Result<UserLoginRespDTO> login(@Valid @RequestBody UserLoginReqDTO requestParam) {
         Result<UserLoginRespDTO> result = Results.success(userService.login(requestParam));
         return result;
     }

@@ -10,6 +10,7 @@ import com.nym.shortlink.core.dto.req.RecycleBinSaveReqDTO;
 import com.nym.shortlink.core.dto.req.ShortLinkRecycleBinPageReqDTO;
 import com.nym.shortlink.core.dto.resp.ShortLinkPageRespDTO;
 import com.nym.shortlink.core.service.RecycleBinService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -33,7 +34,7 @@ public class RecycleBinController {
      */
     @RateLimit(resource = "recycle_save", qps = 5)
     @PostMapping("/api/short-link/admin/v1/recycle-bin/save")
-    public Result<Void> saveRecycleBin(@RequestBody RecycleBinSaveReqDTO requestParam) {
+    public Result<Void> saveRecycleBin(@Valid @RequestBody RecycleBinSaveReqDTO requestParam) {
         recycleBinService.saveRecycleBin(requestParam);
         return Results.success();
     }
@@ -53,7 +54,7 @@ public class RecycleBinController {
      */
     @RateLimit(resource = "recycle_recover", qps = 5)
     @PostMapping("/api/short-link/admin/v1/recycle-bin/recover")
-    public Result<Void> recoverRecycleBin(@RequestBody RecycleBinRecoverReqDTO requestParam) {
+    public Result<Void> recoverRecycleBin(@Valid @RequestBody RecycleBinRecoverReqDTO requestParam) {
         recycleBinService.recoverRecycleBin(requestParam);
         return Results.success();
     }
@@ -63,7 +64,7 @@ public class RecycleBinController {
      */
     @RateLimit(resource = "recycle_remove", qps = 5)
     @PostMapping("/api/short-link/admin/v1/recycle-bin/remove")
-    public Result<Void> removeRecycleBin(@RequestBody RecycleBinRemoveReqDTO requestParam) {
+    public Result<Void> removeRecycleBin(@Valid @RequestBody RecycleBinRemoveReqDTO requestParam) {
         recycleBinService.removeRecycleBin(requestParam);
         return Results.success();
     }

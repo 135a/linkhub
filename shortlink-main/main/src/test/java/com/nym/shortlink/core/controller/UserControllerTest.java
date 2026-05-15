@@ -1,5 +1,6 @@
 package com.nym.shortlink.core.controller;
 
+import com.nym.shortlink.core.common.convention.exception.GlobalExceptionHandler;
 import com.nym.shortlink.core.dto.req.UserLoginReqDTO;
 import com.nym.shortlink.core.dto.resp.UserLoginRespDTO;
 import com.nym.shortlink.core.service.UserService;
@@ -12,6 +13,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
@@ -29,9 +31,15 @@ class UserControllerTest {
 
     private MockMvc mockMvc;
 
+    @SuppressWarnings("resource")
     @BeforeEach
     void setUp() {
-        mockMvc = MockMvcBuilders.standaloneSetup(new UserController(userService)).build();
+        LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
+        validator.afterPropertiesSet();
+        mockMvc = MockMvcBuilders.standaloneSetup(new UserController(userService))
+                .setValidator(validator)
+                .setControllerAdvice(new GlobalExceptionHandler())
+                .build();
     }
 
     @Test
@@ -77,5 +85,49 @@ class UserControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("0"))
                 .andExpect(jsonPath("$.data").value(true));
+    }
+
+    @Test
+    @DisplayName("注册时用户名为空返回 400")
+    void registerWithBlankUsernameReturns400() throws Exception {
+        mockMvc.perform(post("/api/short-link/admin/v1/user")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                    "username": "",
+                                    "password": "password123",
+                                    "phone": "13800000001"
+                                }"""))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("400"));
+    }
+
+    @Test
+    @DisplayName("注册时密码过短返回 400")
+    void registerWithShortPasswordReturns400() throws Exception {
+        mockMvc.perform(post("/api/short-link/admin/v1/user")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                    "username": "testuser",
+                                    "password": "12345",
+                                    "phone": "13800000001"
+                                }"""))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("400"));
+    }
+
+    @Test
+    @DisplayName("登录时用户名为空返回 400")
+    void loginWithBlankUsernameReturns400() throws Exception {
+        mockMvc.perform(post("/api/short-link/admin/v1/user/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                    "username": "",
+                                    "password": "password123"
+                                }"""))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("400"));
     }
 }

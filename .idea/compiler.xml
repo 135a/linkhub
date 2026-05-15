@@ -14,7 +14,6 @@
         <outputRelativeToContentRoot value="true" />
         <processorPath useClasspath="false">
           <entry name="$PROJECT_DIR$/../apache-maven-3.9.11-bin/apache-maven-3.9.11/repository/org/projectlombok/lombok/1.18.32/lombok-1.18.32.jar" />
-          <entry name="$PROJECT_DIR$/../apache-maven-3.9.11-bin/apache-maven-3.9.11/repository/org/projectlombok/lombok/1.18.32/lombok-1.18.32.jar" />
         </processorPath>
         <module name="shortlink-main" />
       </profile>

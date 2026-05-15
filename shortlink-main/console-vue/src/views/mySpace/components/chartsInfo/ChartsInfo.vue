@@ -1,5 +1,5 @@
 <template>
-  <el-dialog v-model="dialogVisible" :title="props.title" width="70%" :before-close="handleClose">
+  <el-dialog v-model="dialogVisible" :title="props.title" :width="isMobileCharts ? '95vw' : '70%'" :before-close="handleClose">
     <template #header>
       <div style="display: flex">
         <img v-if="!isGroup" :src="getImgUrl(props.favicon)" width="25" height="25" alt="" />
@@ -23,9 +23,9 @@
       <!-- 切换， name用于确定展示哪个标签，和showPane对应 -->
       <el-tab-pane name="访问数据" label="访问数据">
         <!-- 数据图表 -->
-        <div class="content-box scroll-box" style="height: calc(100vh - 280px); overflow: scroll">
+        <div class="content-box scroll-box" style="height: calc(100vh - 280px); overflow-y: auto; overflow-x: hidden">
           <!-- 访问曲线 -->
-          <TitleContent class="chart-item" style="width: 800px" title="访问曲线" @onMounted="initLineChart">
+          <TitleContent class="chart-item" style="width: 100%; max-width: 800px" title="访问曲线" @onMounted="initLineChart">
             <template v-slot:titleButton>
               <div>
                 <el-button @click="isLine = !isLine">切换为曲线</el-button>
@@ -63,7 +63,7 @@
             </template>
           </TitleContent>
           <!-- 地图 -->
-          <TitleContent class="chart-item" style="width: 800px" title="访问地区" @onMounted="initMap">
+          <TitleContent class="chart-item" style="width: 100%; max-width: 800px" title="访问地区" @onMounted="initMap">
             <template #titleButton>
               <!-- <el-button @click="isChina = !isChina">切换为世界地图</el-button> -->
             </template>
@@ -98,7 +98,7 @@
             </template>
           </TitleContent>
           <!-- 24小时分布 -->
-          <TitleContent class="chart-item" title="24小时分布" style="width: 800px">
+          <TitleContent class="chart-item" title="24小时分布" style="width: 100%; max-width: 800px">
             <template #content>
               <BarChart style="height: 100%; width: 100%" :chartData="{
                 xAxis: [
@@ -110,13 +110,13 @@
             </template>
           </TitleContent>
           <!-- 高频访问IP -->
-          <TitleContent class="chart-item" title="高频访问IP" style="width: 390px">
+          <TitleContent class="chart-item" title="高频访问IP" style="width: 100%; max-width: 390px">
             <template #content>
               <KeyValue :dataLists="props.info?.topIpStats" style="height: 100%; width: 100%"></KeyValue>
             </template>
           </TitleContent>
           <!-- 一周分布 -->
-          <TitleContent class="chart-item" title="一周分布" style="width: 390px">
+          <TitleContent class="chart-item" title="一周分布" style="width: 100%; max-width: 390px">
             <template #content>
               <BarChart style="height: 100%; width: 100%" :chartData="{
                 xAxis: ['周一', '周二', '周三', '周四', '周五', '周六', '周日'],
@@ -126,37 +126,37 @@
           </TitleContent>
 
           <!-- 访问来源TOP5 -->
-          <!-- <TitleContent class="chart-item" title="访问来源 TOP5" style="width: 390px">
+          <!-- <TitleContent class="chart-item" title="访问来源 TOP5" style="width: 100%; max-width: 390px">
             <template #content>
               <KeyValue :data-lists="IPdataList" style="height: 100%; width: 100%;"></KeyValue>
             </template>
           </TitleContent> -->
           <!-- 操作系统 -->
-          <TitleContent class="chart-item" title="操作系统" style="width: 390px">
+          <TitleContent class="chart-item" title="操作系统" style="width: 100%; max-width: 390px">
             <template #content>
               <ProgressLine style="height: 100%; width: 100%" :dataLists="props.info?.osStats"></ProgressLine>
             </template>
           </TitleContent>
           <!-- 访问浏览器 -->
-          <TitleContent class="chart-item" title="访问浏览器" style="width: 390px">
+          <TitleContent class="chart-item" title="访问浏览器" style="width: 100%; max-width: 390px">
             <template #content>
               <ProgressLine style="height: 100%; width: 100%" :dataLists="props.info?.browserStats"></ProgressLine>
             </template>
           </TitleContent>
           <!-- 访客类型 -->
-          <TitleContent v-if="!isGroup" class="chart-item" title="访客类型" style="width: 390px">
+          <TitleContent v-if="!isGroup" class="chart-item" title="访客类型" style="width: 100%; max-width: 390px">
             <template #content>
               <ProgressPie style="height: 100%; width: 100%" :labels="['新访客', '旧访客']" :data="userTypeList"></ProgressPie>
             </template>
           </TitleContent>
           <!-- 访问网络 -->
-          <TitleContent class="chart-item" title="访问网络" style="width: 390px">
+          <TitleContent class="chart-item" title="访问网络" style="width: 100%; max-width: 390px">
             <template #content>
               <ProgressPie style="height: 100%; width: 100%" :labels="['WIFI', '移动数据']" :data="netWorkList"></ProgressPie>
             </template>
           </TitleContent>
           <!-- 访问设备 -->
-          <TitleContent class="chart-item" title="访问设备" style="width: 390px">
+          <TitleContent class="chart-item" title="访问设备" style="width: 100%; max-width: 390px">
             <template #content>
               <ProgressPie style="height: 100%; width: 100%" :labels="['电脑', '移动设备']" :data="deviceList"></ProgressPie>
             </template>
@@ -397,6 +397,7 @@ watch(
 //   }
 // )
 const dialogVisible = ref(false)
+const isMobileCharts = ref(window.innerWidth < 768)
 const handleClose = () => {
   dateValue.value = null
   unVisible()
@@ -406,14 +407,28 @@ const handleClose = () => {
 }
 const isVisible = () => {
   dialogVisible.value = true
+  setTimeout(() => handleEchartsResize(), 300)
 }
 const unVisible = () => {
   dialogVisible.value = false
 }
-defineExpose({
-  unVisible,
-  isVisible
-})
+// ECharts resize 适配
+let echartsResizeTimer = null
+const handleEchartsResize = () => {
+  isMobileCharts.value = window.innerWidth < 768
+  if (echartsResizeTimer) clearTimeout(echartsResizeTimer)
+  echartsResizeTimer = setTimeout(() => {
+    const charts = document.querySelectorAll('.lineChart, .chinaMap, .worldMap')
+    charts.forEach((dom) => {
+      const instance = echarts.getInstanceByDom(dom)
+      if (instance && !instance.isDisposed()) {
+        instance.resize()
+      }
+    })
+  }, 150)
+}
+
+window.addEventListener('resize', handleEchartsResize)
 
 // 中国地图中展示的数据
 const chinaMapData = ref([
@@ -921,22 +936,27 @@ watch(
 }
 
 .chinaMap {
-  width: 330px;
+  width: 100%;
+  max-width: 330px;
   height: 240px;
 }
 
 .worldMap {
-  width: 330px;
+  width: 100%;
+  max-width: 330px;
   height: 240px;
 }
 
 .list-chart {
   display: flex;
   justify-content: space-between;
+  overflow-x: auto;
+  flex-wrap: wrap;
 
   .top10 {
     padding: 15px 30px;
-    width: 400px;
+    width: 100%;
+    max-width: 400px;
     height: 270px;
     display: flex;
     flex-direction: column;
@@ -971,8 +991,26 @@ watch(
 
 .lineChart {
   margin: 10px;
-  width: 600px;
+  width: 100%;
+  max-width: 600px;
   height: 200px;
+}
+
+/* 移动端图表适配 */
+@media (max-width: 767px) {
+  .chart-item {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  .list-chart {
+    flex-direction: column;
+
+    .top10 {
+      max-width: 100%;
+      padding: 10px 15px;
+    }
+  }
 }
 
 .flex-box {

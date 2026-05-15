@@ -1,6 +1,7 @@
 package com.nym.shortlink.core.dto.req;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
+import jakarta.validation.constraints.NotBlank;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -25,11 +26,13 @@ public class ShortLinkCreateReqDTO {
     /**
      * 原始链接
      */
+    @NotBlank(message = "原始链接不能为空")
     private String originUrl;
 
     /**
      * 分组标识
      */
+    @NotBlank(message = "分组标识不能为空")
     private String gid;
 
     /**
