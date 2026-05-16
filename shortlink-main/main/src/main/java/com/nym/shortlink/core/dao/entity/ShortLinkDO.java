@@ -11,7 +11,11 @@ import lombok.NoArgsConstructor;
 import java.util.Date;
 
 /**
- * 短链接实体
+ * 短链接实体类
+ * 使用了Lombok的@Data、@Builder、@NoArgsConstructor和@AllArgsConstructor注解，自动生成getter、setter、builder构造方法和无参、全参构造方法
+ * 继承自BaseDO，可能包含一些基础字段如创建时间、更新时间等
+ * 使用@TableName注解指定对应的数据库表名为"t_link"
+ * 使用@TableField注解处理特殊字段名和数据库字段映射
  */
 @Data
 @Builder

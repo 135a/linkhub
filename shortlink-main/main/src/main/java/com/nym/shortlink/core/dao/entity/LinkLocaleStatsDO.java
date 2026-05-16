@@ -11,13 +11,14 @@ import java.util.Date;
 
 /**
  * 地区统计访问实体
+ * 该类用于存储短链接的地区访问统计数据，包含地理位置和访问量等信息
  */
-@Data
-@TableName("t_link_locale_stats")
-@Builder
-@NoArgsConstructor
-@AllArgsConstructor
-public class LinkLocaleStatsDO extends BaseDO {
+@Data                // 使用Lombok的@Data注解自动生成getter、setter等方法
+@TableName("t_link_locale_stats")  // 指定对应的数据库表名为t_link_locale_stats
+@Builder            // 使用Lombok的@Builder注解提供Builder模式的构建器
+@NoArgsConstructor  // 使用Lombok的@NoArgsConstructor注解生成无参构造方法
+@AllArgsConstructor // 使用Lombok的@AllArgsConstructor注解生成全参构造方法
+public class LinkLocaleStatsDO extends BaseDO {  // 继承BaseDO，可能包含一些公共字段如创建时间、更新时间等
 
     /**
      * id

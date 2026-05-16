@@ -7,7 +7,9 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * 短链接跳转实体
+ * 短链接跳转实体类
+ * 使用了Lombok注解来简化代码，包括@Data（getter/setter）、@Builder（构建器模式）、
+ * @NoArgsConstructor（无参构造）和@AllArgsConstructor（全参构造）
  */
 @Data
 @Builder

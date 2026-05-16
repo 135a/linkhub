@@ -11,6 +11,7 @@ import java.util.Date;
 
 /**
  * 访问设备统计访问实体
+ * 该类用于存储短链接的访问设备统计信息，继承自BaseDO
  */
 @Data
 @TableName("t_link_device_stats")
