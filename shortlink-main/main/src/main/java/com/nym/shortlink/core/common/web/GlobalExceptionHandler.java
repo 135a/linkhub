@@ -23,6 +23,7 @@ import java.util.Optional;
 
 /**
  * 全局异常处理器
+ * 用于统一处理应用中抛出的各种异常，提供统一的异常响应格式
  */
 @Component
 @Slf4j
@@ -31,16 +32,24 @@ public class GlobalExceptionHandler {
 
     /**
      * 拦截参数验证异常
+     * 当请求参数验证失败时，会触发此方法处理
+     * @param request HTTP请求对象
+     * @param ex 方法参数验证异常对象
+     * @return 统一的响应结果对象
      */
     @SneakyThrows
     @ExceptionHandler(value = MethodArgumentNotValidException.class)
     public Result validExceptionHandler(HttpServletRequest request, MethodArgumentNotValidException ex) {
+        // 获取验证结果中的第一个字段错误
         BindingResult bindingResult = ex.getBindingResult();
         FieldError firstFieldError = CollectionUtil.getFirst(bindingResult.getFieldErrors());
+        // 获取错误信息，如果没有则使用空字符串
         String exceptionStr = Optional.ofNullable(firstFieldError)
                 .map(FieldError::getDefaultMessage)
                 .orElse(StrUtil.EMPTY);
+        // 记录错误日志
         log.error("[{}] {} [ex] {}", request.getMethod(), getUrl(request), exceptionStr);
+        // 返回客户端错误响应
         return Results.failure(BaseErrorCode.CLIENT_ERROR.code(), exceptionStr);
     }
 
