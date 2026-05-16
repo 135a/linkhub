@@ -13,11 +13,13 @@ import static com.nym.shortlink.core.common.constant.ShortLinkConstant.DEFAULT_C
 
 /**
  * 短链接工具类
+ * 提供与短链接相关的实用方法，包括IP获取、设备信息识别、域名提取等功能
  */
 public class LinkUtil {
 
     /**
      * 获取短链接缓存有效期时间
+     * 计算从当前时间到指定有效期的毫秒数，如果有效期无效则返回默认缓存时间
      *
      * @param validDate 有效期时间
      * @return 有限期时间戳

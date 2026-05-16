@@ -15,11 +15,14 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * 缓存命中率监控服务实现 — 同步 Micrometer Counter 替换异步 DiscardPolicy 线程池
+ * 该服务用于监控和记录缓存的命中情况，包括L1缓存命中、L2缓存命中和缓存未命中情况
+ * 使用Micrometer进行指标统计，使用Redis进行数据持久化
  */
 @Slf4j
 @Service
 public class CacheMonitoringServiceImpl implements CacheMonitoringService {
 
+    // 缓存命中统计的Redis键前缀
     private static final String CACHE_HIT_KEY = "short-link:stats:cache:hit:daily:";
     private static final String CACHE_MISS_KEY = "short-link:stats:cache:miss:daily:";
     private static final String CACHE_L1_HIT_KEY = "short-link:stats:cache:l1hit:daily:";

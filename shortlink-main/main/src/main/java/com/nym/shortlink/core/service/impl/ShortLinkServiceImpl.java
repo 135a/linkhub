@@ -87,37 +87,54 @@ import static com.nym.shortlink.core.common.constant.RedisKeyConstant.SHORT_LINK
 
 /**
  * 短链接接口实现层
+ * 提供短链接的创建、更新、查询、重定向等功能
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLinkDO> implements ShortLinkService {
 
+    // 布隆过滤器，用于防止缓存穿透
     private final RBloomFilter<String> shortUriCreateCachePenetrationBloomFilter;
+    // 短链接跳转数据访问层
     private final ShortLinkGotoMapper shortLinkGotoMapper;
+    // Redis操作模板
     private final StringRedisTemplate stringRedisTemplate;
+    // Redisson分布式客户端
     private final RedissonClient redissonClient;
+    // 短链接统计消息生产者
     private final ShortLinkStatsSaveProducer shortLinkStatsSaveProducer;
 
+    // 线程池，用于处理异步任务，如统计记录、favicon获取等
     private static final java.util.concurrent.ExecutorService STATS_EXECUTOR = new java.util.concurrent.ThreadPoolExecutor(
-            Runtime.getRuntime().availableProcessors(),
-            Runtime.getRuntime().availableProcessors() * 2,
-            60L, java.util.concurrent.TimeUnit.SECONDS,
-            new java.util.concurrent.ArrayBlockingQueue<>(2000),
-            new java.util.concurrent.ThreadPoolExecutor.CallerRunsPolicy()
+            Runtime.getRuntime().availableProcessors(), // 核心线程数
+            Runtime.getRuntime().availableProcessors() * 2, // 最大线程数
+            60L, java.util.concurrent.TimeUnit.SECONDS, // 空闲线程存活时间
+            new java.util.concurrent.ArrayBlockingQueue<>(2000), // 工作队列
+            new java.util.concurrent.ThreadPoolExecutor.CallerRunsPolicy() // 拒绝策略
     );
 
+    // 白名单配置
     private final GotoDomainWhiteListConfiguration gotoDomainWhiteListConfiguration;
+    // 缓存监控服务
     private final CacheMonitoringService cacheMonitoringService;
+    // 性能计数器服务
     private final PerformanceCounterService performanceCounterService;
+    // 重定向缓存
     private final Cache<String, String> redirectCache;
+    // 指标注册表
     private final MeterRegistry meterRegistry;
+    // 各级缓存计数器
     private Counter redirectCounterL1;
     private Counter redirectCounterL2;
     private Counter redirectCounterL3;
     private Counter redirectCounterNotFound;
+    // 重定向计时器
     private Timer redirectTimer;
 
+    /**
+     * 初始化监控指标
+     */
     @PostConstruct
     void initMetrics() {
         this.redirectCounterL1 = Counter.builder("shortlink_redirect_total")
@@ -141,20 +158,30 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
                 .register(meterRegistry);
     }
 
+    // 默认短链接域名
     @Value("${short-link.domain.default}")
     private String createShortLinkDefaultDomain;
 
+    /**
+     * 创建短链接
+     * @param requestParam 创建短链接请求参数
+     * @return 创建结果
+     */
     @Transactional(rollbackFor = Exception.class)
     @Override
     public ShortLinkCreateRespDTO createShortLink(ShortLinkCreateReqDTO requestParam) {
-        // verificationWhitelist(requestParam.getOriginUrl());
+        // verificationWhitelist(requestParam.getOriginUrl()); // 暂时注释掉白名单验证
+        // 确定使用的域名
         String domain = StrUtil.isNotBlank(requestParam.getDomain()) ? requestParam.getDomain()
                 : createShortLinkDefaultDomain;
+        // 生成短链接后缀
         String shortLinkSuffix = generateSuffix(requestParam, domain);
+        // 构建完整短链接
         String fullShortUrl = StrBuilder.create(domain)
                 .append("/")
                 .append(shortLinkSuffix)
                 .toString();
+        // 构建短链接数据对象
         ShortLinkDO shortLinkDO = ShortLinkDO.builder()
                 .domain(domain)
                 .originUrl(requestParam.getOriginUrl())
@@ -172,12 +199,15 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
                 .fullShortUrl(fullShortUrl)
                 .favicon(null)   // 先置 null，favicon 异步获取后更新
                 .build();
+        // 构建短链接跳转数据对象
         ShortLinkGotoDO linkGotoDO = ShortLinkGotoDO.builder()
                 .fullShortUrl(fullShortUrl)
                 .gid(requestParam.getGid())
                 .build();
         try {
+            // 保存短链接数据
             baseMapper.insert(shortLinkDO);
+            // 保存跳转数据
             shortLinkGotoMapper.insert(linkGotoDO);
         } catch (DuplicateKeyException ex) {
             // 首先判断是否存在布隆过滤器，如果不存在直接新增

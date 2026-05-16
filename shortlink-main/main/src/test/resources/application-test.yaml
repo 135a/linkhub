@@ -19,9 +19,7 @@ spring:
       port: 6379
   autoconfigure:
     exclude:
-      - org.apache.shardingsphere.driver.ShardingSphereDriver
       - org.redisson.spring.starter.RedissonAutoConfiguration
-      - com.clickhouse.jdbc.ClickHouseDriver
 
 short-link:
   domain:

@@ -60,11 +60,15 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * 短链接监控接口实现层
+ * 提供短链接访问数据的统计功能，包括单个短链接和分组的访问统计
+ * 支持多种维度的数据分析：按时间、地区、设备、浏览器等
+ * 使用缓存机制提高查询性能，支持ClickHouse和MySQL双数据源
  */
 @Service
 @RequiredArgsConstructor
 public class ShortLinkStatsServiceImpl implements ShortLinkStatsService {
 
+    // 注入各种数据访问对象和缓存客户端
     private final LinkGroupMapper linkGroupMapper;
     private final LinkAccessStatsMapper linkAccessStatsMapper;
     private final LinkLocaleStatsMapper linkLocaleStatsMapper;

@@ -56,24 +56,5 @@ public class RedisKeyConstant {
      */
     public static final String SHORT_LINK_STATS_UIP_KEY = "short-link:stats:uip:";
 
-    /**
-     * 短链接监控消息保存队列 Topic 缓存标识
-     * 用于定义消息队列的Topic，实现监控消息的传递
-     * 格式：short-link:stats-stream
-     */
-    public static final String SHORT_LINK_STATS_STREAM_TOPIC_KEY = "short-link:stats-stream";
-
-    /**
-     * 短链接监控消息保存队列 Group 缓存标识
-     * 用于定义消息队列的消费者组，实现消息的分组消费
-     * 格式：short-link:stats-stream:only-group
-     */
-    public static final String SHORT_LINK_STATS_STREAM_GROUP_KEY = "short-link:stats-stream:only-group";
-
-    /**
-     * 创建短链接锁标识
-     * 用于在创建短链接时加锁，防止重复创建
-     * 格式：short-link:lock:create
-     */
     public static final String SHORT_LINK_CREATE_LOCK_KEY = "short-link:lock:create";
 }

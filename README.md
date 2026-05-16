@@ -15,6 +15,45 @@
 - **深度洞察**：引入 ClickHouse 列式数据库专属存储海量访问明细数据，千万级数据量下 PV/UV 等多维报表毫秒级聚合查询。
 - **高并发与高可用**：基于 RocketMQ 将重定向主链路与统计写入流程彻底异步解耦；结合 Sentinel 针对不同场景定制限流策略（读操作快速失败 / 写操作匀速排队），系统稳如磐石。
 
+### 🧭 重定向核心链路（三级缓存）
+
+```
+请求 GET /{shortUri}
+  │
+  ▼
+L1: Caffeine 本地缓存 ──命中──▶ 302 重定向 (P99 < 2ms)
+  │ 未命中
+  ▼
+L2: Redis (short-link:goto:{url}) ──命中──▶ 302 重定向
+  │ 未命中
+  ▼
+布隆过滤器检查 ──不存在──▶ 404
+  │ 可能存在
+  ▼
+Redisson 分布式锁 ──获取锁──▶ L3: MySQL (t_link_goto / t_link)
+  │                                     │
+  └──── 回填 Redis + Caffeine ──────────┘
+```
+
+| 缓存层 | 技术 | 命中率预期 | 说明 |
+|:---|:---|:---|:---|
+| L1 | Caffeine | 热点 Key > 90% | 50K 容量，写后 5min 过期 |
+| L2 | Redis | > 95% | 永久缓存 + 空值缓存（30min TTL）防穿透 |
+| L3 | MySQL | 兜底 | Redisson 布隆过滤器 + 分布式锁防击穿 |
+
+### 🗄️ 数据库分片策略
+
+4 张表各 16 个分片，基于 ShardingSphere-JDBC `HASH_MOD` 算法：
+
+| 表 | 分片键 | 说明 |
+|:---|:---|:---|
+| `t_link_0~15` | `gid` | 短链接主表 |
+| `t_link_goto_0~15` | `full_short_url` | 跳转路由表 |
+| `t_group_0~15` | `username` | 分组表 |
+| `t_user_0~15` | `username` | 用户表（phone/mail 列 AES 加密） |
+
+通过 `-Ddatabase.env=dev|prod` 切换 ShardingSphere 配置。
+
 ---
 
 ## 🛠️ 技术栈

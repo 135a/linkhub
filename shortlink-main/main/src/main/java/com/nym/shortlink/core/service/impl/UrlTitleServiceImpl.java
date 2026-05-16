@@ -11,9 +11,11 @@ import java.net.URL;
 
 /**
  * URL 标题接口实现层
+ * 该类实现了UrlTitleService接口，提供了通过URL获取网页标题的功能
  */
 @Service
-public class UrlTitleServiceImpl implements UrlTitleService {
+public class
+UrlTitleServiceImpl implements UrlTitleService {
 
     @SneakyThrows
     @Override

@@ -5,12 +5,12 @@
 - 保持单仓库研发协作效率
 - 明确前后端边界，前端只通过 API 通信
 - 用 Docker Compose 统一开发/测试/部署运行方式
-- 后端仅保留一个 Spring Boot 单体模块（`project`）
+- 后端仅保留一个 Spring Boot 单体模块（`main`）
 
 ## 目录映射
 
 - `frontend`: 对应 `console-vue/`
-- `backend`: 对应 `project/`
+- `backend`: 对应 `main/`
 - `deploy/nginx`: 统一入口与域名映射
 
 ## 请求链路
@@ -18,7 +18,7 @@
 1. 浏览器访问 `example.com`
 2. Nginx 返回前端静态资源
 3. 前端调用 `/api/...`
-4. Nginx 直接转发到 `project:8001`
+4. Nginx 直接转发到 `main:8001`
 
 ## API 契约
 

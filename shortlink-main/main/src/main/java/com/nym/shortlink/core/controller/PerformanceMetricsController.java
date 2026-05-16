@@ -17,56 +17,73 @@ import java.time.LocalDate;
 
 /**
  * 性能指标聚合接口
+ * 提供系统性能相关的汇总数据，包括缓存命中率、布隆过滤器拦截次数、熔断器拦截次数等
  */
 @RestController
 @RequiredArgsConstructor
 public class PerformanceMetricsController {
 
-    private static final String CACHE_HIT_KEY = "short-link:stats:cache:hit:daily:";
-    private static final String CACHE_L1_HIT_KEY = "short-link:stats:cache:l1hit:daily:";
-    private static final String CACHE_MISS_KEY = "short-link:stats:cache:miss:daily:";
 
-    private final CacheMonitoringService cacheMonitoringService;
-    private final PerformanceCounterService performanceCounterService;
+
+    // Redis 缓存命中相关键名常量
+    private static final String CACHE_L1_HIT_KEY = "short-link:stats:cache:l1hit:daily:";    // L1缓存命中键名
+
+
+
+    // 依赖服务注入
+    private final CacheMonitoringService cacheMonitoringService;    // 缓存监控服务
+    private final PerformanceCounterService performanceCounterService;  // 性能计数器服务
 
     @Autowired
-    private StringRedisTemplate stringRedisTemplate;
+    private StringRedisTemplate stringRedisTemplate;  // Redis操作模板
 
+    /**
+     * 获取性能指标汇总信息
+     * @return 包含缓存命中率、布隆过滤器拦截次数、熔断器拦截次数等信息的响应对象
+     */
     @GetMapping("/api/short-link/v1/metrics/summary")
     public Result<PerformanceSummaryRespDTO> getPerformanceSummary() {
+        // 获取今日缓存命中率数据
         CacheHitRateDTO todayHitRate = cacheMonitoringService.getTodayHitRate();
 
         // 计算 L1 命中率
-        String today = LocalDate.now().toString();
+        String today = LocalDate.now().toString();  // 获取当前日期字符串
+        // 从Redis获取L1缓存命中次数
         String l1HitStr = stringRedisTemplate.opsForValue().get(CACHE_L1_HIT_KEY + today);
         long l1HitCount = l1HitStr != null ? Long.parseLong(l1HitStr) : 0;
         long totalCount = todayHitRate.getTotalCount();
+        // 计算L1命中率，保留两位小数
         double l1HitRate = totalCount == 0 ? 0.0 : Math.round((double) l1HitCount / totalCount * 10000.0) / 100.0;
         double l2HitRate = todayHitRate.getHitRate() != null ? todayHitRate.getHitRate() : 0.0;
 
+        // 构建响应对象
         PerformanceSummaryRespDTO response = PerformanceSummaryRespDTO.builder()
-                .cacheHitRate(todayHitRate.getHitRate() + "%")
-                .cacheHitCount(todayHitRate.getHitCount())
-                .cacheMissCount(todayHitRate.getMissCount())
-                .bloomFilterInterceptCount(performanceCounterService.getBloomFilterInterceptCount())
-                .sentinelBlockCount(performanceCounterService.getSentinelBlockCount())
-                .todayRedirectTotal(totalCount)
-                .l1CacheHitCount(l1HitCount)
-                .l1CacheHitRate(l1HitRate + "%")
-                .l2CacheHitRate(l2HitRate + "%")
+                .cacheHitRate(todayHitRate.getHitRate() + "%")                    // L2缓存命中率
+                .cacheHitCount(todayHitRate.getHitCount())                         // L2缓存命中次数
+                .cacheMissCount(todayHitRate.getMissCount())                       // 缓存未命中次数
+                .bloomFilterInterceptCount(performanceCounterService.getBloomFilterInterceptCount())  // 布隆过滤器拦截次数
+                .sentinelBlockCount(performanceCounterService.getSentinelBlockCount())                // 熔断器拦截次数
+                .todayRedirectTotal(totalCount)                                   // 今日重定向总数
+                .l1CacheHitCount(l1HitCount)                                     // L1缓存命中次数
+                .l1CacheHitRate(l1HitRate + "%")                                 // L1缓存命中率
+                .l2CacheHitRate(l2HitRate + "%")                                 // L2缓存命中率
                 .build();
         return Results.success(response);
     }
 
+    /**
+     * 性能指标汇总响应DTO
+     * 包含系统各项性能指标的汇总数据
+     */
     @Data
     @Builder
     public static class PerformanceSummaryRespDTO {
-        private String cacheHitRate;
-        private long cacheHitCount;
-        private long cacheMissCount;
-        private long bloomFilterInterceptCount;
-        private long sentinelBlockCount;
-        private long todayRedirectTotal;
+        private String cacheHitRate;          // L2缓存命中率（百分比字符串）
+        private long cacheHitCount;           // L2缓存命中次数
+        private long cacheMissCount;          // 缓存未命中次数
+        private long bloomFilterInterceptCount; // 布隆过滤器拦截次数
+        private long sentinelBlockCount;      // 熔断器拦截次数
+        private long todayRedirectTotal;      // 今日重定向总数
         /** L1 Caffeine 本地缓存命中次数 */
         private long l1CacheHitCount;
         /** L1 Caffeine 命中率（百分比字符串） */

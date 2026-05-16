@@ -6,6 +6,9 @@ import lombok.Data;
 
 /**
  * 用户持久层实体
+ * 该类继承自BaseDO，用于定义用户相关的数据库实体对象
+ * 使用@Data注解自动生成getter、setter等方法
+ * 使用@TableName注解指定对应的数据库表名为"t_user"
  */
 @Data
 @TableName("t_user")

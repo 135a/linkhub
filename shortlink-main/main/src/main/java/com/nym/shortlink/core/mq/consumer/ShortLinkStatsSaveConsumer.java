@@ -38,6 +38,7 @@ import static com.nym.shortlink.core.common.constant.ShortLinkConstant.AMAP_REMO
 
 /**
  * 短链接监控状态保存消息队列消费者
+ * 负责处理短链接的访问统计数据，包括UV、UIP、地理位置等信息
  */
 @Slf4j
 @Component
@@ -48,6 +49,7 @@ import static com.nym.shortlink.core.common.constant.ShortLinkConstant.AMAP_REMO
 )
 public class ShortLinkStatsSaveConsumer implements RocketMQListener<Map<String, String>> {
 
+    // 注入各种Mapper和客户端，用于数据库操作和缓存
     private final ShortLinkMapper shortLinkMapper;
     private final ShortLinkGotoMapper shortLinkGotoMapper;
     private final RedissonClient redissonClient;
@@ -64,15 +66,21 @@ public class ShortLinkStatsSaveConsumer implements RocketMQListener<Map<String, 
     private final ClickHouseStatsMapper clickHouseStatsMapper;
     private final SseEmitterService sseEmitterService;
 
+    // 从配置文件中读取统计存储主库和地理位置查询的API密钥
     @Value("${stats.storage.primary:clickhouse}")
     private String statsPrimary;
 
     @Value("${short-link.stats.locale.amap-key}")
     private String statsLocaleAmapKey;
 
+    /**
+     * 消息处理方法
+     * @param producerMap 包含统计数据和链接信息的Map
+     */
     @Override
     public void onMessage(Map<String, String> producerMap) {
         String keys = producerMap.get("keys");
+        // 检查消息是否正在处理中
         if (!messageQueueIdempotentHandler.isMessageBeingConsumed(keys)) {
             // 判断当前的这个消息流程是否执行完成
             if (messageQueueIdempotentHandler.isAccomplish(keys)) {
