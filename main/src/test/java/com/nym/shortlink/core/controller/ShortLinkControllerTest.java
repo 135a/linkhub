@@ -1,6 +1,6 @@
 package com.nym.shortlink.core.controller;
 
-import com.nym.shortlink.core.common.convention.exception.GlobalExceptionHandler;
+import com.nym.shortlink.core.common.web.GlobalExceptionHandler;
 import com.nym.shortlink.core.common.convention.result.Result;
 import com.nym.shortlink.core.dto.req.ShortLinkCreateReqDTO;
 import com.nym.shortlink.core.dto.resp.ShortLinkCreateRespDTO;
