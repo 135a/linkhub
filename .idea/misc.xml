@@ -8,6 +8,7 @@
     <option name="originalFiles">
       <list>
         <option value="$PROJECT_DIR$/shortlink-main/pom.xml" />
+        <option value="$PROJECT_DIR$/main/pom.xml" />
       </list>
     </option>
   </component>
