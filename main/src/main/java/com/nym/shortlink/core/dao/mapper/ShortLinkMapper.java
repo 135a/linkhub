@@ -28,8 +28,12 @@ public interface ShortLinkMapper extends BaseMapper<ShortLinkDO> {
 
     /**
      * 分页统计短链接总数
+ * 该方法用于获取分页查询条件下的短链接总数统计结果
+ *
+ * @param requestParam 分页查询请求参数，包含分页信息和可能的过滤条件
+ * @return 返回符合条件的短链接总数，类型为Long
      */
-    Long pageLinkCount(ShortLinkPageReqDTO requestParam);
+    Long pageLinkCount(@Param("gid") String gid);
 
     /**
      * 分页统计回收站短链接

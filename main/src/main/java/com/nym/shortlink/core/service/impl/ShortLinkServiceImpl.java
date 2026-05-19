@@ -445,7 +445,7 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
         }
         requestParam.setSearchCount(false);
         IPage<ShortLinkDO> resultPage = baseMapper.pageLink(requestParam);
-        resultPage.setTotal(baseMapper.pageLinkCount(requestParam));
+        resultPage.setTotal(Optional.ofNullable(baseMapper.pageLinkCount(requestParam.getGid())).orElse(0L));
         return resultPage.convert(each -> {
             ShortLinkPageRespDTO result = BeanUtil.toBean(each, ShortLinkPageRespDTO.class);
             result.setDomain("http://" + result.getDomain());
