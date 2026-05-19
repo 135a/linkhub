@@ -98,8 +98,8 @@ class UserControllerTest {
                                     "password": "password123",
                                     "phone": "13800000001"
                                 }"""))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("400"));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("A000001"));
     }
 
     @Test
@@ -113,8 +113,8 @@ class UserControllerTest {
                                     "password": "12345",
                                     "phone": "13800000001"
                                 }"""))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("400"));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("A000001"));
     }
 
     @Test
@@ -127,7 +127,7 @@ class UserControllerTest {
                                     "username": "",
                                     "password": "password123"
                                 }"""))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("400"));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("A000001"));
     }
 }

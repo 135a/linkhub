@@ -107,8 +107,8 @@ class ShortLinkControllerTest {
                                     "originUrl": "",
                                     "gid": "test-gid"
                                 }"""))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("400"));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("A000001"));
     }
 
     @Test
@@ -121,8 +121,8 @@ class ShortLinkControllerTest {
                                     "originUrl": "https://example.com",
                                     "gid": ""
                                 }"""))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("400"));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("A000001"));
     }
 
     @Test
@@ -138,7 +138,7 @@ class ShortLinkControllerTest {
                                     "originUrl": "https://updated.com",
                                     "validDateType": 0
                                 }"""))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("400"));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("A000001"));
     }
 }
