@@ -1,14 +1,87 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0"
-         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+<?xml version='1.0' encoding='UTF-8'?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
-    <parent>
-        <groupId>com.nym.shortlink</groupId>
-        <artifactId>shortlink-all</artifactId>
-        <version>1.0</version>
-    </parent>
-    <artifactId>shortlink-main</artifactId>
+    <groupId>com.nym.shortlink</groupId><version>1.0</version><artifactId>shortlink-main</artifactId>
+
+    <properties>
+        <java.version>17</java.version>
+        <spring-boot.version>3.0.7</spring-boot.version>
+        <mybatis-spring-boot-starter.version>3.0.2</mybatis-spring-boot-starter.version>
+        <shardingsphere.version>5.3.2</shardingsphere.version>
+        <jjwt.version>0.9.1</jjwt.version>
+        <fastjson2.version>2.0.36</fastjson2.version>
+        <mybatis-plus.version>3.5.3.1</mybatis-plus.version>
+        <dozer-core.version>6.5.2</dozer-core.version>
+        <hutool-all.version>5.8.27</hutool-all.version>
+        <redisson.version>3.27.2</redisson.version>
+        <guava.version>30.0-jre</guava.version>
+        <jsoup.version>1.15.3</jsoup.version>
+        <easyexcel.version>3.1.3</easyexcel.version>
+        <spotless-maven-plugin.version>2.22.1</spotless-maven-plugin.version>
+        <hutool.version>5.8.31</hutool.version>
+
+    </properties>
+
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-dependencies</artifactId>
+                <version>${spring-boot.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
+            <dependency>
+                <groupId>com.baomidou</groupId>
+                <artifactId>mybatis-plus-boot-starter</artifactId>
+                <version>${mybatis-plus.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>org.apache.shardingsphere</groupId>
+                <artifactId>shardingsphere-jdbc-core</artifactId>
+                <version>${shardingsphere.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>io.jsonwebtoken</groupId>
+                <artifactId>jjwt</artifactId>
+                <version>${jjwt.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>com.alibaba.fastjson2</groupId>
+                <artifactId>fastjson2</artifactId>
+                <version>${fastjson2.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>com.github.dozermapper</groupId>
+                <artifactId>dozer-core</artifactId>
+                <version>${dozer-core.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>cn.hutool</groupId>
+                <artifactId>hutool-all</artifactId>
+                <version>${hutool-all.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>org.redisson</groupId>
+                <artifactId>redisson-spring-boot-starter</artifactId>
+                <version>${redisson.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>com.google.guava</groupId>
+                <artifactId>guava</artifactId>
+                <version>${guava.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
 
     <dependencies>
 
@@ -61,7 +134,7 @@
             <artifactId>spring-boot-starter-data-redis</artifactId>
         </dependency>
 
-        <!-- Lettuce 连接池支持（必须引入，否则 lettuce.pool 配置不生效） -->
+        
         <dependency>
             <groupId>org.apache.commons</groupId>
             <artifactId>commons-pool2</artifactId>
@@ -134,19 +207,19 @@
             <scope>test</scope>
         </dependency>
 
-        <!-- BCrypt 密码哈希（仅 crypto 模块，不引入 spring-security 全家桶） -->
+        
         <dependency>
             <groupId>org.springframework.security</groupId>
             <artifactId>spring-security-crypto</artifactId>
         </dependency>
 
-        <!-- Caffeine L1 本地缓存 -->
+        
         <dependency>
             <groupId>com.github.ben-manes.caffeine</groupId>
             <artifactId>caffeine</artifactId>
         </dependency>
 
-        <!-- ClickHouse 官方 JDBC 驱动（HTTP 协议） -->
+        
         <dependency>
             <groupId>com.clickhouse</groupId>
             <artifactId>clickhouse-jdbc</artifactId>
@@ -159,7 +232,7 @@
                 </exclusion>
             </exclusions>
         </dependency>
-        <!-- ClickHouse JDBC HTTP 传输依赖 -->
+        
         <dependency>
             <groupId>org.apache.httpcomponents.client5</groupId>
             <artifactId>httpclient5</artifactId>
