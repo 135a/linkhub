@@ -9,20 +9,19 @@ import com.baomidou.mybatisplus.extension.spring.MybatisSqlSessionFactoryBean;
 import org.apache.ibatis.session.SqlSessionFactory;
 import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.boot.context.properties.ConfigurationProperties;
-import org.springframework.boot.jdbc.DataSourceBuilder;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 
-import org.springframework.core.env.Environment;
-
 import javax.sql.DataSource;
 
 /**
- * 主数据源配置 (MySQL / ShardingSphere)
- * 解决 ClickHouse 数据源配置导致 MybatisPlusAutoConfiguration 失效的问题。
+ * 主数据源 SqlSessionFactory 配置
+ * <p>
+ * 不手动创建 DataSource —— 直接复用 Spring Boot 从 spring.datasource.* 自动装配的
+ * ShardingSphere DataSource。本类仅负责创建一个 @Primary 的 SqlSessionFactory，
+ * 防止 ClickHouse 的 SqlSessionFactory 抢占 MybatisPlusAutoConfiguration 的默认行为。
  */
 @Configuration
 @MapperScan(
@@ -32,18 +31,9 @@ import javax.sql.DataSource;
 public class PrimaryDataSourceConfig {
 
     @Primary
-    @Bean(name = "primaryDataSource")
-    public DataSource primaryDataSource(Environment env) {
-        return DataSourceBuilder.create()
-                .driverClassName(env.getProperty("spring.datasource.driver-class-name"))
-                .url(env.getProperty("spring.datasource.url"))
-                .build();
-    }
-
-    @Primary
     @Bean(name = "primarySqlSessionFactory")
     public SqlSessionFactory primarySqlSessionFactory(
-            @Qualifier("primaryDataSource") DataSource dataSource,
+            @Qualifier("dataSource") DataSource dataSource,
             MyMetaObjectHandler myMetaObjectHandler) throws Exception {
 
         MybatisSqlSessionFactoryBean factoryBean = new MybatisSqlSessionFactoryBean();
@@ -62,7 +52,7 @@ public class PrimaryDataSourceConfig {
         MybatisPlusInterceptor interceptor = new MybatisPlusInterceptor();
         interceptor.addInnerInterceptor(new PaginationInnerInterceptor(DbType.MYSQL));
         factoryBean.setPlugins(interceptor);
-        
+
         // 性能优化：关闭 SQL 打印（与原本的 yaml 保持一致）
         MybatisConfiguration configuration = new MybatisConfiguration();
         configuration.setLogImpl(org.apache.ibatis.logging.nologging.NoLoggingImpl.class);
