@@ -54,10 +54,21 @@ public class SseEmitterService {
         }
     }
 
+    private final Map<String, Long> lastPushTimeMap = new ConcurrentHashMap<>();
+
     /**
      * 广播给所有在线用户 (如果不知道谁是谁)
      */
     public void broadcastUpdate(String gid) {
+        // 限流防抖：同一个分组的数据更新，最多每 2 秒向前端推送一次
+        // 防止在压测或高并发场景下，产生 SSE 更新风暴导致前端浏览器卡死
+        long currentTime = System.currentTimeMillis();
+        Long lastTime = lastPushTimeMap.getOrDefault(gid, 0L);
+        if (currentTime - lastTime < 2000) {
+            return; 
+        }
+        lastPushTimeMap.put(gid, currentTime);
+
         emitterMap.forEach((username, emitter) -> {
             try {
                 emitter.send(SseEmitter.event().name("update").data("{\"gid\":\"" + gid + "\"}"));
