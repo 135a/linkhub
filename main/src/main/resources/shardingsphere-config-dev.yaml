@@ -68,6 +68,6 @@ rules:
       common_encryptor:
         type: AES
         props:
-          aes-key-value: ${SHORTLINK_AES_SECRET_KEY:d6oadClrrb9A3GWo}
+          aes-key-value: d6oadClrrb9A3GWo
 props:
   sql-show: false
