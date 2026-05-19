@@ -11,7 +11,7 @@ import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.nym.shortlink.core.common.convention.exception.ServiceException;
 import com.nym.shortlink.core.dao.entity.*;
 import com.nym.shortlink.core.dao.mapper.*;
-import com.nym.shortlink.core.dao.mapper.clickhouse.ClickHouseStatsMapper;
+import com.nym.shortlink.core.dao.clickhouse.ClickHouseStatsMapper;
 import com.nym.shortlink.core.dto.biz.ShortLinkStatsRecordDTO;
 import com.nym.shortlink.core.mq.idempotent.MessageQueueIdempotentHandler;
 import com.nym.shortlink.core.service.SseEmitterService;

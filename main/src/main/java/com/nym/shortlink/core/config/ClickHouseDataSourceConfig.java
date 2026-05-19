@@ -20,7 +20,7 @@ import javax.sql.DataSource;
  */
 @Configuration // 标识这是一个配置类，用于定义 Spring Bean
 @MapperScan(  // 扫描指定包下的 MyBatis Mapper 接口，并注入到 Spring 容器中
-        basePackages = "com.nym.shortlink.core.dao.mapper.clickhouse", // 指定 Mapper 接口所在的包路径
+        basePackages = "com.nym.shortlink.core.dao.clickhouse", // 指定 Mapper 接口所在的包路径
         sqlSessionFactoryRef = "clickHouseSqlSessionFactory" // 指定使用的 SqlSessionFactory Bean 名称
 )
 public class ClickHouseDataSourceConfig { // ClickHouse 数据源配置类

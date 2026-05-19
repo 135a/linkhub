@@ -25,7 +25,7 @@ import com.nym.shortlink.core.dao.mapper.LinkDeviceStatsMapper;
 import com.nym.shortlink.core.dao.mapper.LinkLocaleStatsMapper;
 import com.nym.shortlink.core.dao.mapper.LinkNetworkStatsMapper;
 import com.nym.shortlink.core.dao.mapper.LinkOsStatsMapper;
-import com.nym.shortlink.core.dao.mapper.clickhouse.ClickHouseStatsMapper;
+import com.nym.shortlink.core.dao.clickhouse.ClickHouseStatsMapper;
 import com.nym.shortlink.core.dto.req.ShortLinkGroupStatsAccessRecordReqDTO;
 import com.nym.shortlink.core.dto.req.ShortLinkGroupStatsReqDTO;
 import com.nym.shortlink.core.dto.req.ShortLinkStatsAccessRecordReqDTO;

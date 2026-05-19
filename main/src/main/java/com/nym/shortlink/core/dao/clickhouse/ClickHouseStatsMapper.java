@@ -1,4 +1,4 @@
-package com.nym.shortlink.core.dao.mapper.clickhouse;
+package com.nym.shortlink.core.dao.clickhouse;
 
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
