@@ -443,7 +443,7 @@
 <script setup>
 import { ref, reactive, onMounted, onUnmounted, getCurrentInstance, watch, nextTick } from 'vue'
 import Sortable from 'sortablejs'
-import { cloneDeep } from 'lodash'
+import { cloneDeep, debounce } from 'lodash'
 import ChartsInfo from './components/chartsInfo/ChartsInfo.vue'
 import CreateLink from './components/createLink/CreateLink.vue'
 import CreateLinks from './components/createLink/CreateLinks.vue'
@@ -691,17 +691,25 @@ onMounted(() => {
   const token = getToken()
   if (username && token) {
     sseSource = new EventSource(`/api/short-link/admin/v1/sse/connect?username=${username}&Token=${token}`)
+    
+    // 防抖处理：避免高并发下频繁刷新导致浏览器卡死 (RESULT_CODE_HUNG)
+    const debouncedUpdate = debounce(() => {
+      if (document.visibilityState === 'visible') {
+        if (!isRecycleBin.value) {
+          queryPage()
+        } else {
+          queryRecycleBinPage()
+        }
+      }
+    }, 2000, { maxWait: 5000 })
+
     sseSource.addEventListener('update', (event) => {
-      // 收到后端推送的数据更新事件
       try {
         const data = JSON.parse(event.data)
-        // 如果后端推送的更新属于当前选中的分组，或者干脆简单粗暴直接刷新当前视图
-        if (document.visibilityState === 'visible') {
-          if (!isRecycleBin.value) {
-            queryPage()
-          } else {
-            queryRecycleBinPage()
-          }
+        // 仅当当前选中的分组发生数据变化时，或者在回收站时才刷新
+        const currentGid = editableTabs.value?.[selectedIndex.value]?.gid
+        if (data.gid === currentGid || isRecycleBin.value) {
+          debouncedUpdate()
         }
       } catch (e) {
         console.error('SSE Error parsing data:', e)
