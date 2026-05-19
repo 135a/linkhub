@@ -20,6 +20,8 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import java.util.Objects;
 import java.util.Optional;
+import java.util.stream.Collectors;
+import jakarta.validation.ConstraintViolationException;
 
 /**
  * 全局异常处理器
@@ -64,6 +66,18 @@ public class GlobalExceptionHandler {
         }
         log.error("[{}] {} [ex] {}", request.getMethod(), request.getRequestURL().toString(), ex.toString());
         return Results.failure(ex);
+    }
+
+    /**
+     * 处理 @Validated 单参数校验失败异常
+     */
+    @ExceptionHandler(value = ConstraintViolationException.class)
+    public Result constraintViolationExceptionHandler(HttpServletRequest request, ConstraintViolationException ex) {
+        String message = ex.getConstraintViolations().stream()
+                .map(v -> v.getPropertyPath() + ": " + v.getMessage())
+                .collect(Collectors.joining(", "));
+        log.error("[{}] {} [ex] {}", request.getMethod(), getUrl(request), message);
+        return Results.failure(BaseErrorCode.CLIENT_ERROR.code(), message);
     }
 
     /**
