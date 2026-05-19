@@ -16,6 +16,8 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 
+import org.springframework.core.env.Environment;
+
 import javax.sql.DataSource;
 
 /**
@@ -31,9 +33,11 @@ public class PrimaryDataSourceConfig {
 
     @Primary
     @Bean(name = "primaryDataSource")
-    @ConfigurationProperties(prefix = "spring.datasource")
-    public DataSource primaryDataSource() {
-        return DataSourceBuilder.create().build();
+    public DataSource primaryDataSource(Environment env) {
+        return DataSourceBuilder.create()
+                .driverClassName(env.getProperty("spring.datasource.driver-class-name"))
+                .url(env.getProperty("spring.datasource.url"))
+                .build();
     }
 
     @Primary
