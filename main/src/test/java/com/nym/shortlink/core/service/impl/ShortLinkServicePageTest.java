@@ -87,7 +87,7 @@ class ShortLinkServicePageTest {
         mockPage.setRecords(Collections.singletonList(mockEntity));
 
         when(shortLinkMapper.pageLink(req)).thenReturn(mockPage);
-        when(shortLinkMapper.pageLinkCount(req)).thenReturn(1L);
+        when(shortLinkMapper.pageLinkCount(req.getGid())).thenReturn(1L);
 
         IPage<ShortLinkPageRespDTO> result = shortLinkService.pageShortLink(req);
 
