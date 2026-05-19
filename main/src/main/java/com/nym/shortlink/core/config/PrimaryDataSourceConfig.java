@@ -8,7 +8,6 @@ import com.baomidou.mybatisplus.extension.plugins.inner.PaginationInnerIntercept
 import com.baomidou.mybatisplus.extension.spring.MybatisSqlSessionFactoryBean;
 import org.apache.ibatis.session.SqlSessionFactory;
 import org.mybatis.spring.annotation.MapperScan;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
@@ -19,9 +18,11 @@ import javax.sql.DataSource;
 /**
  * 主数据源 SqlSessionFactory 配置
  * <p>
- * 不手动创建 DataSource —— 直接复用 Spring Boot 从 spring.datasource.* 自动装配的
- * ShardingSphere DataSource。本类仅负责创建一个 @Primary 的 SqlSessionFactory，
- * 防止 ClickHouse 的 SqlSessionFactory 抢占 MybatisPlusAutoConfiguration 的默认行为。
+ * 不手动创建 DataSource —— 直接复用 Spring Boot 从 spring.datasource.*
+ * 自动装配的 ShardingSphere DataSource（现在是唯一的 DataSource Bean）。
+ * <p>
+ * 本类仅负责创建一个 @Primary 的 SqlSessionFactory，因为 ClickHouse 的
+ * SqlSessionFactory 会导致 MybatisPlusAutoConfiguration 跳过默认装配。
  */
 @Configuration
 @MapperScan(
@@ -33,7 +34,7 @@ public class PrimaryDataSourceConfig {
     @Primary
     @Bean(name = "primarySqlSessionFactory")
     public SqlSessionFactory primarySqlSessionFactory(
-            @Qualifier("dataSource") DataSource dataSource,
+            DataSource dataSource,
             MyMetaObjectHandler myMetaObjectHandler) throws Exception {
 
         MybatisSqlSessionFactoryBean factoryBean = new MybatisSqlSessionFactoryBean();

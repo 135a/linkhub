@@ -1,28 +1,22 @@
 package com.nym.shortlink.core.config;
 
 import com.baomidou.mybatisplus.extension.spring.MybatisSqlSessionFactoryBean;
+import com.zaxxer.hikari.HikariDataSource;
 import org.apache.ibatis.session.SqlSessionFactory;
 import org.mybatis.spring.annotation.MapperScan;
-import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.boot.context.properties.ConfigurationProperties;
-import org.springframework.boot.jdbc.DataSourceBuilder;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.Lazy;
+import org.springframework.core.env.Environment;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
-
-import javax.sql.DataSource;
 
 /**
  * ClickHouse 数据源配置
  * <p>
- * 与 MySQL 主库数据源相互独立，通过 @Qualifier 区分。
- * 连接细节和 HikariCP 池参数由 application.yaml 中的 clickhouse.datasource.* 配置管理。
- * <p>
- * 使用 @Lazy 延迟初始化，避免在 DataSourceAutoConfiguration 条件判断阶段
- * 因存在 DataSource bean 而跳过主数据源的自动装配。
+ * 关键设计：不将 ClickHouse DataSource 暴露为 Spring Bean，
+ * 而是在 SqlSessionFactory 内部内联创建。
+ * 这样就不会干扰 Spring Boot 的 DataSourceAutoConfiguration，
+ * 让主数据源（ShardingSphere）的自动装配正常运行。
  */
-@Lazy
 @Configuration
 @MapperScan(
         basePackages = "com.nym.shortlink.core.dao.clickhouse",
@@ -30,18 +24,27 @@ import javax.sql.DataSource;
 )
 public class ClickHouseDataSourceConfig {
 
-    @Bean(name = "clickHouseDataSource")
-    @ConfigurationProperties("clickhouse.datasource")
-    public DataSource clickHouseDataSource() {
-        return DataSourceBuilder.create()
-                .driverClassName("com.clickhouse.jdbc.ClickHouseDriver")
-                .build();
-    }
-
     @Bean(name = "clickHouseSqlSessionFactory")
-    public SqlSessionFactory clickHouseSqlSessionFactory(
-            @Qualifier("clickHouseDataSource") DataSource dataSource
-    ) throws Exception {
+    public SqlSessionFactory clickHouseSqlSessionFactory(Environment env) throws Exception {
+        // 内联创建 DataSource，不注册为 Spring Bean，避免干扰自动装配
+        HikariDataSource dataSource = new HikariDataSource();
+        dataSource.setDriverClassName("com.clickhouse.jdbc.ClickHouseDriver");
+        dataSource.setJdbcUrl(env.getProperty("clickhouse.datasource.jdbc-url"));
+        dataSource.setUsername(env.getProperty("clickhouse.datasource.username"));
+        dataSource.setPassword(env.getProperty("clickhouse.datasource.password"));
+        dataSource.setMaximumPoolSize(
+                env.getProperty("clickhouse.datasource.maximum-pool-size", Integer.class, 100));
+        dataSource.setMinimumIdle(
+                env.getProperty("clickhouse.datasource.minimum-idle", Integer.class, 10));
+        dataSource.setConnectionTimeout(
+                env.getProperty("clickhouse.datasource.connection-timeout", Long.class, 30000L));
+        dataSource.setIdleTimeout(
+                env.getProperty("clickhouse.datasource.idle-timeout", Long.class, 600000L));
+        dataSource.setMaxLifetime(
+                env.getProperty("clickhouse.datasource.max-lifetime", Long.class, 1800000L));
+        dataSource.setPoolName(
+                env.getProperty("clickhouse.datasource.pool-name", "ClickHouseHikariPool"));
+
         MybatisSqlSessionFactoryBean factoryBean = new MybatisSqlSessionFactoryBean();
         factoryBean.setDataSource(dataSource);
         factoryBean.setMapperLocations(
