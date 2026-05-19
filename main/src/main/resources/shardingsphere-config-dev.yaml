@@ -1,9 +1,3 @@
-# 使用文件存储元数据，不依赖 H2 数据库
-mode:
-  type: Standalone
-  repository:
-    type: File
-
 dataSources:
   ds_0:
     dataSourceClassName: com.zaxxer.hikari.HikariDataSource

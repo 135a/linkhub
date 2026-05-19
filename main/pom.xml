@@ -201,10 +201,11 @@
             <artifactId>mockito-inline</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- ShardingSphere 5.3.2 standalone 模式硬编码使用 H2 做元数据存储，无法替代 -->
         <dependency>
             <groupId>com.h2database</groupId>
             <artifactId>h2</artifactId>
-            <scope>test</scope>
+            <scope>runtime</scope>
         </dependency>
 
         
