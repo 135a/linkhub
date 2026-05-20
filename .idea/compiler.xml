@@ -7,7 +7,6 @@
         <sourceOutputDir name="target/generated-sources/annotations" />
         <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
         <outputRelativeToContentRoot value="true" />
-        <module name="shortlink-main (2)" />
       </profile>
       <profile name="Annotation profile for shortlink-main" enabled="true">
         <sourceOutputDir name="target/generated-sources/annotations" />
@@ -26,6 +25,7 @@
       <module name="shortlink-all" target="17" />
       <module name="shortlink-all (1)" target="17" />
       <module name="shortlink-main (1)" target="17" />
+      <module name="shortlink-main (2)" target="1.5" />
       <module name="shortlink-project" target="17" />
       <module name="shortlink-project (1)" target="17" />
       <module name="shortlink-register" target="17" />

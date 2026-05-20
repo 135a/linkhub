@@ -473,6 +473,8 @@ const nums = ref(0)
 const favicon1 = ref()
 const originUrl1 = ref()
 const orderIndex = ref(0)
+const form = reactive({})
+const formLabelWidth = '120px'
 
 const { proxy } = getCurrentInstance()
 const API = proxy.$API

@@ -13,7 +13,7 @@
     </template>
     <div style="position: absolute; right: 30px; z-index: 999">
       <el-date-picker v-model="dateValue" :clearable="true" type="daterange" range-separator="To" start-placeholder="开始时间"
-        end-placeholder="结束时间" value-format="YYYY-MM-DD" :shortcuts="shortcuts" :size="size" />
+        end-placeholder="结束时间" value-format="YYYY-MM-DD" :shortcuts="shortcuts" />
       <el-button style="margin-left: 10px;" type="primary" @click="emit('changeTime', dateValue)">
         <el-icon style="margin-right: 5px"><Refresh /></el-icon>刷新数据
       </el-button>
@@ -412,6 +412,9 @@ const isVisible = () => {
 const unVisible = () => {
   dialogVisible.value = false
 }
+defineExpose({
+  isVisible
+})
 // ECharts resize 适配
 let echartsResizeTimer = null
 const handleEchartsResize = () => {
