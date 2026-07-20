@@ -1,0 +1,108 @@
+server:
+  port: 8001
+  tomcat:
+    threads:
+      max: 300        # 与压测并发线程数匹配，避免过度竞争
+      min-spare: 50
+    accept-count: 100
+    max-keep-alive-requests: -1 # 禁用 keep-alive 限制，防止高并发压测时 Tomcat 主动断开连接导致 SocketException
+  servlet:
+    encoding:
+      charset: UTF-8
+      force: true
+      enabled: true
+
+spring:
+  application:
+    name: short-link-project
+  datasource:
+    driver-class-name: org.apache.shardingsphere.driver.ShardingSphereDriver
+    url: jdbc:shardingsphere:classpath:shardingsphere-config-${database.env:dev}.yaml
+  data:
+    redis:
+      host: ${SPRING_DATA_REDIS_HOST:127.0.0.1}
+      port: 6379
+#      password: 123456
+      lettuce:
+        pool:
+          max-active: 200   # 最大连接数，扩大以支撑高并发测试系统的极限
+          max-idle: 100     # 最大空闲连接
+          min-idle: 20      # 最小空闲连接，预热连接避免冷启动延迟
+          max-wait: 2000ms  # 连接等待超时，增加等待时间以避免超时报错
+
+  mvc:
+    view:
+      prefix: /templates/
+      suffix: .html
+
+short-link:
+  domain:
+    default: ${DOMAIN:example.com}
+  stats:
+    locale:
+      amap-key: 99b616b8433a465891a505ab161746af
+  goto-domain:
+    white-list:
+      enable: false
+      names: '拿个offer,知乎,掘金,博客园'
+      details:
+        - nageoffer.com
+        - zhihu.com
+        - juejin.cn
+        - cnblogs.com
+  group:
+    max-num: 20
+  flow-limit:
+    enable: false
+    time-window: 1
+    max-access-count: 50000
+    # 性能优化：将跳转接口排除在用户流控之外
+    # 跳转路径格式为 /{shortUri}（单段根路径），用 /* 精确匹配
+    # /* 只匹配根目录单段路径（/abc123），不会匹配 /api/... 等多级路径
+    # 跳转接口已有 Sentinel QPS 保护，无需重复用户级流控
+    # /api/** 等认证接口仍然保留流控，不受影响
+    exclusions: /actuator/**,/api/short-link/v1/metrics/summary,/*
+
+mybatis-plus:
+  configuration:
+    # 性能优化：高并发压测期间关闭 SQL 控制台日志，避免 stdout I/O 成为瓶颈
+    # 生产环境建议使用 Slf4jImpl 输出到日志文件（异步 appender）
+    log-impl: org.apache.ibatis.logging.nologging.NoLoggingImpl
+  mapper-locations: classpath:mapper/*.xml
+rocketmq:
+  name-server: ${ROCKETMQ_NAME_SERVER:127.0.0.1:9876}
+  producer:
+    group: short-link_project-service_stats-save_pg
+    topic: short-link_project-service_topic
+    send-message-timeout: 2000
+    retry-times-when-send-failed: 1
+    retry-times-when-send-async-failed: 1
+  consumer:
+    group: short-link_project-service_stats-save_cg
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,metrics,prometheus,info
+  endpoint:
+    health:
+      show-details: always
+
+# Caffeine L1 本地缓存配置
+caffeine:
+  short-link-redirect:
+    maximum-size: 50000        # 扩大容量，减少 LRU 淘汰导致的 L1 穿透
+    expire-after-write: 300s   # 写后 5 分钟过期，热 key 在压测期间不会过期
+
+# ClickHouse 统计数据源
+clickhouse:
+  datasource:
+    url: jdbc:clickhouse://${CLICKHOUSE_HOST:127.0.0.1}:8123/shortlink_stats
+    username: ${CLICKHOUSE_USER:admin}
+    password: ${CLICKHOUSE_PASSWORD:admin}
+
+# 统计存储策略（clickhouse / mysql）
+stats:
+  storage:
+    primary: clickhouse

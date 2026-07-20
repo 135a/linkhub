@@ -1,0 +1,228 @@
+services:
+  mysql:
+    build:
+      context: .
+      dockerfile: mysql/Dockerfile
+    container_name: shortlink-mysql
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: link
+    volumes:
+      - mysql-data:/var/lib/mysql
+    networks:
+      - shortlink-network
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+        reservations:
+          memory: 512m
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
+  redis:
+    image: redis:latest
+    container_name: shortlink-redis
+    ports:
+      - "6379:6379"
+    networks:
+      - shortlink-network
+    command: redis-server --maxmemory 384mb --maxmemory-policy allkeys-lru
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+        reservations:
+          memory: 256m
+    restart: unless-stopped
+
+  rocketmq-namesrv:
+    image: apache/rocketmq:4.9.4
+    container_name: rmqnamesrv
+    ports:
+      - "9876:9876"
+    environment:
+      - JAVA_OPT=-Xms64m -Xmx128m -Xmn64m -XX:MetaspaceSize=32m -XX:MaxMetaspaceSize=64m
+    command: sh mqnamesrv
+    networks:
+      - shortlink-network
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+        reservations:
+          memory: 128m
+    restart: unless-stopped
+
+  rocketmq-broker:
+    image: apache/rocketmq:4.9.4
+    container_name: rmqbroker
+    ports:
+      - "10909:10909"
+      - "10911:10911"
+    environment:
+      - NAMESRV_ADDR=rocketmq-namesrv:9876
+      - JAVA_OPT_EXT=-server -Xms512m -Xmx1024m -Xmn512m -XX:MetaspaceSize=128m -XX:MaxMetaspaceSize=256m
+    command: sh mqbroker -c /home/rocketmq/rocketmq-4.9.4/conf/broker.conf
+    depends_on:
+      - rocketmq-namesrv
+    networks:
+      - shortlink-network
+    deploy:
+      resources:
+        limits:
+          memory: 2g
+        reservations:
+          memory: 1536m
+    restart: unless-stopped
+
+  project:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: shortlink-project
+    ports:
+      - "8001:8001"
+    env_file:
+      - .env
+    environment:
+      - SPRING_PROFILES_ACTIVE=${SPRING_PROFILES_ACTIVE}
+      - SPRING_DATA_REDIS_HOST=${SPRING_DATA_REDIS_HOST}
+      - ROCKETMQ_NAME_SERVER=${ROCKETMQ_NAME_SERVER}
+      - CLICKHOUSE_HOST=${CLICKHOUSE_HOST}
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      rocketmq-namesrv:
+        condition: service_started
+      rocketmq-broker:
+        condition: service_started
+      clickhouse:
+        condition: service_healthy
+    networks:
+      - shortlink-network
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+        reservations:
+          memory: 768m
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/127.0.0.1/8001'"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 45s
+  frontend:
+    build:
+      context: .
+      dockerfile: console-vue/Dockerfile
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL}
+    env_file:
+      - .env
+    environment:
+      - VITE_API_BASE_URL=${VITE_API_BASE_URL}
+    container_name: shortlink-frontend
+    # ports:
+    #   - "3000:3000"  # 外部端口已关闭，由总网关代理
+    depends_on:
+      project:
+        condition: service_started
+    networks:
+      - shortlink-network
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+        reservations:
+          memory: 256m
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  clickhouse:
+
+    build:
+      context: ./clickhouse
+      dockerfile: Dockerfile
+    container_name: shortlink-clickhouse
+    ports:
+      - "8123:8123"
+    volumes:
+      - clickhouse-data:/var/lib/clickhouse
+    environment:
+      - CLICKHOUSE_USER=${CLICKHOUSE_USER:-admin}
+      - CLICKHOUSE_PASSWORD=${CLICKHOUSE_PASSWORD:-admin}
+      - CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT=1
+    networks:
+      - shortlink-network
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+        reservations:
+          memory: 512m
+    healthcheck:
+      test: ["CMD-SHELL", "clickhouse-client --query 'SELECT 1' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
+  nginx:
+    build:
+      context: .
+      dockerfile: Dockerfile.nginx
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL}
+    container_name: shortlink-nginx
+    # ports:
+    #   - "80:80"  # 端口冲突：宿主机 80 已被 nginx-gateway 占用，此处关闭，由总网关代理
+
+    env_file:
+      - .env
+    environment:
+      - NGINX_SERVER_NAME=${NGINX_SERVER_NAME:-example.com}
+      - VITE_API_BASE_URL=${VITE_API_BASE_URL}
+    depends_on:
+      project:
+        condition: service_started
+    networks:
+      - shortlink-network
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+        reservations:
+          memory: 128m
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+networks:
+  shortlink-network:
+    driver: bridge
+
+volumes:
+  mysql-data:
+  clickhouse-data:
