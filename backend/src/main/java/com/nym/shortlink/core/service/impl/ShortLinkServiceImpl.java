@@ -100,7 +100,7 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
             Runtime.getRuntime().availableProcessors() * 2,
             60L, java.util.concurrent.TimeUnit.SECONDS,
             new java.util.concurrent.ArrayBlockingQueue<>(2000),
-            new java.util.concurrent.ThreadPoolExecutor.DiscardPolicy()
+            new java.util.concurrent.ThreadPoolExecutor.CallerRunsPolicy()
     );
 
     private final GotoDomainWhiteListConfiguration gotoDomainWhiteListConfiguration;
@@ -110,6 +110,9 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
 
     @Value("${short-link.domain.default}")
     private String createShortLinkDefaultDomain;
+
+    @Value("${short-link.domain.protocol:http}")
+    private String domainProtocol;
 
     @Transactional(rollbackFor = Exception.class)
     @Override
@@ -172,7 +175,7 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
             }
         });
         return ShortLinkCreateRespDTO.builder()
-                .fullShortUrl("http://" + shortLinkDO.getFullShortUrl())
+                .fullShortUrl(domainProtocol + "://" + shortLinkDO.getFullShortUrl())
                 .originUrl(requestParam.getOriginUrl())
                 .gid(requestParam.getGid())
                 .build();
@@ -217,7 +220,7 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
                     .totalUip(0)
                     .delTime(0L)
                     .fullShortUrl(fullShortUrl)
-                    .favicon(null)   // 先置 null，favicon 异步获取后更新
+                    .favicon(null)
                     .build();
             ShortLinkGotoDO linkGotoDO = ShortLinkGotoDO.builder()
                     .fullShortUrl(fullShortUrl)
@@ -239,7 +242,7 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
             }
         }
         return ShortLinkCreateRespDTO.builder()
-                .fullShortUrl("http://" + fullShortUrl)
+                .fullShortUrl(domainProtocol + "://" + fullShortUrl)
                 .originUrl(requestParam.getOriginUrl())
                 .gid(requestParam.getGid())
                 .build();
@@ -385,7 +388,7 @@ public class ShortLinkServiceImpl extends ServiceImpl<ShortLinkMapper, ShortLink
         resultPage.setTotal(baseMapper.pageLinkCount(requestParam));
         return resultPage.convert(each -> {
             ShortLinkPageRespDTO result = BeanUtil.toBean(each, ShortLinkPageRespDTO.class);
-            result.setDomain("http://" + result.getDomain());
+            result.setDomain(domainProtocol + "://" + result.getDomain());
             return result;
         });
     }

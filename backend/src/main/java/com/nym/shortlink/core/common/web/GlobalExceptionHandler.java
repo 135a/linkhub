@@ -1,7 +1,6 @@
 package com.nym.shortlink.core.common.web;
 
 import cn.hutool.core.collection.CollectionUtil;
-import cn.hutool.core.util.ReflectUtil;
 import cn.hutool.core.util.StrUtil;
 import com.nym.shortlink.core.common.convention.errorcode.BaseErrorCode;
 import com.nym.shortlink.core.common.convention.exception.AbstractException;
@@ -18,7 +17,6 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
-import java.util.Objects;
 import java.util.Optional;
 
 /**
@@ -63,11 +61,8 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(value = Throwable.class)
     public Result defaultErrorHandler(HttpServletRequest request, Throwable throwable) {
         log.error("[{}] {} ", request.getMethod(), getUrl(request), throwable);
-        // 注意，此处是为了聚合模式添加的代码，正常不需要该判断
-        if (throwable.getClass().getSuperclass() != null && Objects.equals(throwable.getClass().getSuperclass().getSimpleName(), AbstractException.class.getSimpleName())) {
-            String errorCode = ReflectUtil.getFieldValue(throwable, "errorCode").toString();
-            String errorMessage = ReflectUtil.getFieldValue(throwable, "errorMessage").toString();
-            return Results.failure(errorCode, errorMessage);
+        if (throwable instanceof AbstractException abstractException) {
+            return Results.failure(abstractException);
         }
         return Results.failure();
     }
