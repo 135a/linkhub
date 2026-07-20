@@ -1,0 +1,26 @@
+# Ignore all dot-directories for IDE and tools
+.idea/
+.vscode/
+.settings/
+.docs/
+
+# Project configuration files
+*.iml
+.project
+.classpath
+
+# Maven
+target/
+!.mvn/wrapper/maven-wrapper.jar
+
+# Node
+node_modules/
+dist/
+
+# Logs
+logs/
+*.log
+
+# OS generated files
+.DS_Store
+Thumbs.db
