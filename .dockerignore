@@ -1,0 +1,27 @@
+# Git and IDEs
+.git
+.gitignore
+.idea/
+.vscode/
+.settings/
+*.iml
+
+# Build and dependencies
+target/
+node_modules/
+dist/
+
+# Local databases and logs
+mysql-data/
+clickhouse-data/
+logs/
+*.log
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# OS generated
+.DS_Store
+Thumbs.db

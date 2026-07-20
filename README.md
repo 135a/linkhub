@@ -4,8 +4,8 @@
 
 ## 项目结构
 
-- `console-vue/`: 前端控制台（Vue 3 + Vite）
-- `project/`: 后端单体服务（唯一后端模块）
+- `front/`: 前端控制台（Vue 3 + Vite）
+- `backend/`: 后端单体服务（唯一后端模块）
 - `deploy/nginx/`: 生产网关与域名映射配置
 - `docs/`: 架构、部署、观测与迁移文档
 
@@ -17,7 +17,7 @@
    - `docker compose up -d --build`
 3. 访问：
    - 前端：`http://localhost`（生产域名为 `https://example.com`）
-   - API：`http://localhost/api/...`（经 Nginx 转发至 `project`）
+   - API：`http://localhost/api/...`（经 Nginx 转发至 `backend`）
 
 ## 质量与治理
 
